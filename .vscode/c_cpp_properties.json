@@ -1,19 +1,16 @@
 {
     "configurations": [
         {
-            "name": "Win32",
+            "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "D:/MinGw/include/"
+                "/opt/miniconda3/include/python3.8",
+                "/opt/miniconda3/lib/python3.8/site-packages/pybind11/include"
             ],
-            "defines": [
-                "_DEBUG",
-                "UNICODE",
-                "_UNICODE"
-            ],
-            "compilerPath": "gcc",
-            "cStandard": "c11",
-            "cppStandard": "c++17",
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++14",
             "intelliSenseMode": "gcc-x64"
         }
     ],
