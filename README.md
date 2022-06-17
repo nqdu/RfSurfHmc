@@ -26,7 +26,7 @@ conda install mpi4py pybind11 numpy
 ```
 
 + This package requires fftw also. Download and install the fftw by the instruction fftw.org
-Modify the compile.sh in ./src/RF and ./src/SWD, and subsitude the var FFTW_INC and FFTW_LIB
+Modify the compile.sh in `./src/RF` and `./src/SWD`, and subsitude the var `FFTW_INC` and `FFTW_LIB`
 
 + Then run `compile.sh` to run this code
 
