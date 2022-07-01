@@ -175,6 +175,8 @@ class plotFig(object):
 
         fig, ax = plt.subplots(figsize=(12,5))
         all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
+        if len(all_misfit.shape) == 1:
+            all_misfit = all_misfit.reshape(1,len(all_misfit))
         # row for chains and col for model_index 
         max_chain = len(all_misfit[:,0])
 
@@ -193,12 +195,9 @@ class plotFig(object):
                     label = "chain %d" %(chain_iter) )
 
             
-        ax.set_ylabel('misfit',fontdict = {'size':15})
+        ax.set_ylabel('misfit')
         ax.set_title('misfit curve from %d chains' %max_chain)
-        ax.set_xlabel('iter',fontdict = {'size':15})
-        #ax.set_xticklabels(fontsize = 15)
-        #ax.set_yticklabels(fontsize = 15)
-
+        ax.set_xlabel('iter')
         ax.legend()
 
         return fig
@@ -241,7 +240,8 @@ class plotFig(object):
 
 
         all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
-        # row for chains and col for model_index 
+        if len(all_misfit.shape) == 1:
+            all_misfit = all_misfit.reshape(1,len(all_misfit))
         max_chain = len(all_misfit[:,0])
 
         thebestmisfit = 1e15
@@ -263,24 +263,23 @@ class plotFig(object):
             self.find_info_in_chain(chain_iter,"synthetic",model_index)
 
             if chain_iter == 0:
-                ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='gray', ls='-', 
-                    lw=0.8, alpha=0.5,label = 'best model')
+                ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='k', ls='-', 
+                    lw=0.8, alpha=0.5)
 
-                ax[2].plot(self.obs_data.tRg, self.obs_data.Rg , color='gray', ls='-', 
-                    lw=0.8, alpha=0.5,label = 'best model')
+                ax[2].plot(self.obs_data.tRg, self.obs_data.Rg , color='k', ls='-', 
+                    lw=0.8, alpha=0.5)
                 
-                ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='gray', ls='-', 
-                    lw=0.8, alpha=0.5,label = 'best model')
+                ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='k', ls='-', 
+                    lw=0.8, alpha=0.5)
             else:
-                ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='gray', ls='-', 
+                ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='k', ls='-', 
                 lw=0.8, alpha=0.5)
-                ax[2].plot(self.obs_data.tRg, self.obs_data.Rg , color='gray', ls='-', 
+                ax[2].plot(self.obs_data.tRg, self.obs_data.Rg , color='k', ls='-', 
                 lw=0.8, alpha=0.5)
-                ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='gray', ls='-', 
+                ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='k', ls='-', 
                 lw=0.8, alpha=0.5)
 
         #plot best syn result 
-        '''
         self.find_info_in_chain(thebestchain,"synthetic",thebestindex)
         ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='b', ls='-', 
         lw=1.5, alpha=0.5, label = 'best model')
@@ -288,7 +287,7 @@ class plotFig(object):
         lw=1.5, alpha=0.5, label = 'best model')
         ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='b', ls='-', 
         lw=1.5, alpha=0.5, label = 'best model')
-        '''
+
         #plot real data
         if self.real_data is not None:
             self.obs_data.rf, self.obs_data.Rc,  self.obs_data.Rg = self.unpack_obs(
@@ -320,7 +319,8 @@ class plotFig(object):
         fig, ax = plt.subplots(fig_num, fig_num, figsize=(15,15))
 
         all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
-
+        if len(all_misfit.shape) == 1:
+            all_misfit = all_misfit.reshape(1,len(all_misfit))
         thebestmisfit = 1e15
         thebestchain = 0
         thebestindex = 0
@@ -352,21 +352,27 @@ class plotFig(object):
             for j in range(fig_num):
                 iter_num_of_var = i*fig_num + j
                 if (iter_num_of_var) < len(self.thk) * 2:
+                
+                    if (iter_num_of_var) == len(self.thk) * 2 - 1 :
+                        continue                
+                
                     ax[i][j].hist((parameter_var[:,iter_num_of_var])[parameter_var[:,iter_num_of_var] != 0])
+                    
 
 
+                    
                     if iter_num_of_var < len(self.vs):
                         ax[i][j].axvline(self.vs[iter_num_of_var],color = 'blue',label = "best")
                         ax[i][j].axvline(vs[iter_num_of_var],color = 'red',label = "real")
-                        ax[i][j].axvline(boundaries[iter_num_of_var,0],color = 'black',label = "range")
-                        ax[i][j].axvline(boundaries[iter_num_of_var,1],color = 'black')
+                    #    ax[i][j].axvline(boundaries[iter_num_of_var,0],color = 'black',label = "range")
+                    #    ax[i][j].axvline(boundaries[iter_num_of_var,1],color = 'black')
                         ax[i][j].legend()
                         ax[i][j].set_xlabel("vs of layer {}".format(iter_num_of_var+1))
                     else:
                         ax[i][j].axvline(self.thk[iter_num_of_var - len(self.thk)],color = 'blue',label = "best")
                         ax[i][j].axvline(thk[iter_num_of_var - len(self.thk)],color = 'red',label = "real")
-                        ax[i][j].axvline(boundaries[iter_num_of_var,0],color = 'black',label = "range")
-                        ax[i][j].axvline(boundaries[iter_num_of_var,1],color = 'black')
+                    #    ax[i][j].axvline(boundaries[iter_num_of_var,0],color = 'black',label = "range")
+                    #    ax[i][j].axvline(boundaries[iter_num_of_var,1],color = 'black')
                         ax[i][j].legend()
                         ax[i][j].set_xlabel("thk of layer {}".format(iter_num_of_var +1- len(self.thk)))
                 else:
@@ -401,7 +407,8 @@ class plotFig(object):
         thebestindex = 0
 
         all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
-        # row for chains and col for model_index 
+        if len(all_misfit.shape) == 1:
+            all_misfit = all_misfit.reshape(1,len(all_misfit))
         max_chain = len(all_misfit[:,0])
 
 
@@ -441,17 +448,22 @@ class plotFig(object):
             break
 
 
+        for i in range(len(hist_grid_rf[:,0])):
+            hist_grid_rf[i,:] = hist_grid_rf[i,:]  / np.max(hist_grid_rf[i,:])
+        for i in range(len(hist_grid_swdRc[:,0])):
+            hist_grid_swdRc[i,:] = hist_grid_swdRc[i,:]  / np.max(hist_grid_swdRc[i,:])
+        for i in range(len(hist_grid_swdRg[:,0])):
+            hist_grid_swdRg[i,:] = hist_grid_swdRg[i,:]  / np.max(hist_grid_swdRg[i,:])
 
-
-
-        ax[0].pcolor( self.obs_data.trf, amp_vector, hist_grid_rf.T, cmap=plt.cm.cool, shading='auto'  )
-        ax[1].pcolor(self.obs_data.tRc, velRc_vector, hist_grid_swdRc.T, cmap=plt.cm.cool, shading='auto'  )
-        ax[2].pcolor(self.obs_data.tRg, velRg_vector, hist_grid_swdRg.T, cmap=plt.cm.cool, shading='auto'  )
+        ax[0].pcolor(self.obs_data.trf, amp_vector, hist_grid_rf.T, cmap=plt.cm.jet, shading='auto'  )
+        ax[1].pcolor(self.obs_data.tRc, velRc_vector, hist_grid_swdRc.T, cmap=plt.cm.jet, shading='auto'  )
+        ax[2].pcolor(self.obs_data.tRg, velRg_vector, hist_grid_swdRg.T, cmap=plt.cm.jet, shading='auto'  )
         
 
         
         all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
-        # row for chains and col for model_index 
+        if len(all_misfit.shape) == 1:
+            all_misfit = all_misfit.reshape(1,len(all_misfit))
         max_chain = len(all_misfit[:,0])
 
         thebestmisfit = 1e15
@@ -473,22 +485,22 @@ class plotFig(object):
             
         #plot best syn result 
         self.find_info_in_chain(thebestchain,"synthetic",thebestindex)
-        ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='b', ls='-', lw=1.5, alpha=0.5, label = "best model")
-        ax[2].plot(self.obs_data.tRg, self.obs_data.Rg , color='b', ls='-', lw=1.5, alpha=0.5, label = "best model")
-        ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='b', ls='-', lw=1.5, alpha=0.5, label = "best model")
+        #ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='b', ls='-', lw=1.5, alpha=0.5, label = "best model")
+        #ax[2].plot(self.obs_data.tRg, self.obs_data.Rg , color='b', ls='-', lw=1.5, alpha=0.5, label = "best model")
+        #ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='b', ls='-', lw=1.5, alpha=0.5, label = "best model")
 
         self.find_info_in_chain(thebestchain,"synthetic_mean",thebestindex)
-        ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='y', ls='-', lw=1.5, alpha=0.5, label = "mean model")
-        ax[2].plot(self.obs_data.tRg, self.obs_data.Rg , color='y', ls='-', lw=1.5, alpha=0.5, label = "mean model")
-        ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='y', ls='-', lw=1.5, alpha=0.5, label = "mean model")
+        ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='black', ls='-', lw=2, alpha=1, label = "mean model")
+        ax[2].plot(self.obs_data.tRg, self.obs_data.Rg , color='black', ls='-', lw=2, alpha=1, label = "mean model")
+        ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='black', ls='-', lw=2, alpha=1, label = "mean model")
         
         #plot real data
         if self.real_data is not None:
             self.obs_data.rf, self.obs_data.Rc,  self.obs_data.Rg = self.unpack_obs(self.real_data,
                     self.obs_data.ntrf, self.obs_data.ntRc, self.obs_data.ntRg)
-        ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='r', ls='-', lw=1.5, alpha=0.5, label = "real model")  
-        ax[2].plot(self.obs_data.tRg, self.obs_data.Rg , color='r', ls='-', lw=1.5, alpha=0.5, label = "real model")  
-        ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='r', ls='-', lw=1.5, alpha=0.5, label = "real model")  
+        ax[0].plot(self.obs_data.trf, self.obs_data.rf , color='white', ls='-', lw=2, alpha=1, label = "real model")  
+        ax[2].plot(self.obs_data.tRg, self.obs_data.Rg , color='white', ls='-', lw=2, alpha=1, label = "real model")  
+        ax[1].plot(self.obs_data.tRc, self.obs_data.Rc , color='white', ls='-', lw=2, alpha=1, label = "real model")  
 
         ax[0].set_ylabel('Amplitude')
         #ax[0].set_title('Best rf result from %d chains' %max_chain)
@@ -499,9 +511,10 @@ class plotFig(object):
         
         for i in range(len(ax)):
             ax[i].legend()
-            ax[i].set_xlabel('t(s)',fontdict = {'size':12.5})
+
         
-        return fig        
+        return fig    
+        ax[-1].set_xlabel('t(s)')    
 
     def plot_bestmodels(self, depth):
         """Return fig.
@@ -509,7 +522,7 @@ class plotFig(object):
         Plot the best (fit) models ever discovered per each chain,
         ignoring outliers.
         """
-        fig, ax = plt.subplots(figsize=(4, 7))
+        fig, ax = plt.subplots(figsize=(4, 6.5))
 
 
         depth_vector = np.linspace(depth[0],depth[1],int(depth[2]))
@@ -519,7 +532,8 @@ class plotFig(object):
         thebestindex = 0
 
         all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
-        # row for chains and col for model_index 
+        if len(all_misfit.shape) == 1:
+            all_misfit = all_misfit.reshape(1,len(all_misfit))
         max_chain = len(all_misfit[:,0])
 
 
@@ -540,17 +554,7 @@ class plotFig(object):
             self.find_info_in_chain(chain_iter,"model",model_index)
             self.depth, self.vs = self.interp(self.depth, self.vs, depth_vector)
 
-            if chain_iter == 0:
-                ax.step(self.vs, self.depth , color='gray', ls='-', lw=0.8, alpha=0.5, label = 'best model')
-            else:
-                ax.step(self.vs, self.depth , color='gray', ls='-', lw=0.8, alpha=0.5)
-            
-            self.find_info_in_chain(chain_iter,"model_init",model_index)
-            self.depth, self.vs = self.interp(self.depth, self.vs, depth_vector)
-            if chain_iter == 0:
-                ax.step(self.vs, self.depth , color='y', ls='-', lw=0.8, alpha=0.5, label = 'init model')
-            else:
-                ax.step(self.vs, self.depth , color='y', ls='-', lw=0.8, alpha=0.5)
+            ax.step(self.vs, self.depth , color='k', ls='-', lw=0.8, alpha=0.5)
 
         # plot ref_model()
         if self.refmodel is not None:
@@ -566,20 +570,18 @@ class plotFig(object):
             ax.step(self.vs, self.depth , color='y', ls='-', lw=1.5, alpha=0.5, label = 'init model')        
         '''
         #plot best model 
-        '''
         self.find_info_in_chain(thebestchain,"model",thebestindex)
         self.depth, self.vs = self.interp(self.depth, self.vs, depth_vector)
         bst_legend = ax.step(self.vs, self.depth , color='b', ls='-', lw=1.5, alpha=0.5, label = 'best model')
-        '''
-        ax.legend(fontsize = 12.5)
+        
+        ax.legend()
 
         ax.invert_yaxis()
-        ax.set_xlabel('$V_S$ in km/s',fontdict = {'size':15})
-        ax.set_ylabel('Depth in km',fontdict = {'size':15})
+        ax.set_xlabel('$V_S$ in km/s')
+        ax.set_ylabel('Depth in km')
 
-        #ax.set_title('Best fit models from %d chains' %max_chain)
-        plt.xticks(fontsize = 15)
-        plt.yticks(fontsize = 15)
+        ax.set_title('Best fit models from %d chains' %max_chain)
+
         return fig
 
     def plot_bestmodels_hit(self, vel, depth):
@@ -600,12 +602,13 @@ class plotFig(object):
         thebestindex = 0
 
         all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
-        # row for chains and col for model_index 
+        if len(all_misfit.shape) == 1:
+            all_misfit = all_misfit.reshape(1,len(all_misfit))
         max_chain = len(all_misfit[:,0])
 
 
         for chain_iter in range(max_chain):
-            mean_chain = np.mean(np.argwhere(all_misfit[chain_iter,:]))
+            mean_chain = np.mean(np.argwhere(all_misfit[chain_iter,:]))/0.1
             for model_iter in range(len(all_misfit[chain_iter,:])):
                 self.find_info_in_chain(chain_iter,"model",model_iter)
 
@@ -614,12 +617,37 @@ class plotFig(object):
 
                 new_depth = depth_vector
                 self.depth, self.vs = self.interp(self.depth, self.vs, new_depth)
+                
+                # fill the gap of vs
+              
+                
+               # print(self.depth, self.vs)
 
           
                 
                 for i in range(len(self.vs)):
                     vel_index = np.searchsorted(vel_vector,self.vs[i])
                     depth_index = np.searchsorted(depth_vector,self.depth[i])
+                    
+                    
+                    if i >= 1:
+                        if (self.vs[i] - self.vs[i-1] < 0.001 ):
+                            # no gaps, discard
+                            pass
+                        else:
+                            #print(np.searchsorted(vel_vector,self.vs[i]),np.searchsorted(vel_vector,self.vs[i-1]))
+                            vs_index_min = min(np.searchsorted(vel_vector,self.vs[i]),
+                            np.searchsorted(vel_vector,self.vs[i-1]))
+                            vs_index_max = max(np.searchsorted(vel_vector,self.vs[i]),
+                            np.searchsorted(vel_vector,self.vs[i-1]))
+                            
+                            for j in range(vs_index_min,vs_index_max):
+                                #print("junliu debug : vs {}".format(j))
+                                hist_grid[depth_index,j] += 1
+                                #pass
+                                
+                                                        
+                    
                     
                     if depth_index == int(vel[2]):
                         continue
@@ -628,14 +656,18 @@ class plotFig(object):
                     
                     hist_grid[depth_index,vel_index] += 1
 
-                
-                
+        #print("junliu debug: ",len(hist_grid[:0]))        
+        for i in range(len(hist_grid[:,0])):
+            hist_grid[i,:] = hist_grid[i,:] / np.max(hist_grid[i,:])
+            #sprint(hist_grid[i,:])
+                    
         clist = ['red','white','blue' ]
         newcmp = LinearSegmentedColormap.from_list('chao',clist)
-        map = ax.pcolor(vel_vector, depth_vector, hist_grid / np.max(np.max(hist_grid)), cmap=plt.cm.jet, shading='auto' )
+        map = ax.pcolor(vel_vector, depth_vector, hist_grid, cmap=plt.cm.jet, shading='auto' )
         #colorbar_pos = fig.add_axes([0.15,0.25,0.35,0.03])
-        plt.colorbar(mappable=map,cax=None,ax=None,shrink=1,fraction=0.05)
-
+        colorbar_h = plt.colorbar(mappable=map,cax=None,ax=None,shrink=1,fraction=0.05)
+        colorbar_h.ax.tick_params(labelsize = 16)
+        colorbar_h.set_label("Probability",fontsize = 16)
         
         #plot best model in different chain
         for chain_iter in range(max_chain):
@@ -659,7 +691,7 @@ class plotFig(object):
         if self.refmodel is not None:
             self.depth , self.vs = self.unpack_thk_vs(self.refmodel)
             self.depth, self.vs = self.interp(self.depth, self.vs, depth_vector)
-            ax.step(self.vs, self.depth , color='r', ls='-', lw=3, alpha=1, label = 'real model')
+            ax.step(self.vs, self.depth , color='white', ls='-', lw=3, alpha=1, label = 'real model')
 
 
             
@@ -677,19 +709,19 @@ class plotFig(object):
         ax.step(self.vs, self.depth , color='b', ls='-', lw=3, alpha=1, label = 'best model')
         '''
         
-        '''
+        print("best chains {}".format(thebestchain))
         self.find_info_in_chain(thebestchain,"model_mean",thebestindex)
         self.depth, self.vs = self.interp(self.depth, self.vs, depth_vector)
-        ax.step(self.vs, self.depth , color='g', ls='-', lw=3, alpha=1, label = 'mean model')
+        ax.step(self.vs, self.depth , color='black', ls='-', lw=3, alpha=1, label = 'mean model')
+
         '''
-       
         self.find_info_in_chain(thebestchain,"model_init",thebestindex)
         print("junliu debug: {}th chain".format(thebestchain))
         self.depth, self.vs = self.interp(self.depth, self.vs, depth_vector)
         ax.step(self.vs, self.depth , color='y', ls='-', lw=3, alpha=1, label = 'init model')
+        '''
         
-        
-        print(plt.rcParams['font.size'])
+        #print(plt.rcParams['font.size'])
         plt.rcParams['font.size'] = 12.5
         
         ax.invert_yaxis()
@@ -697,8 +729,8 @@ class plotFig(object):
         ax.set_ylabel('Depth in km',fontdict = {'size':15})
         ax.legend()
         #ax.set_title('Best fit models from %d chains' %max_chain)
-        #ax.set_xticklabels(fontsize = 15)
-        #ax.set_yticklabels(fontsize = 15)
+        plt.xticks(size = 15)
+        plt.yticks(size = 15)
 
         
         return fig

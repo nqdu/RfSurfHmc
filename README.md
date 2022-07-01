@@ -33,9 +33,9 @@ Modify the compile.sh in `./src/RF` and `./src/SWD`, and subsitude the var `FFTW
 Usage 
 --------------------
 
-+ execute `mpiexec python main_joint.py -n 5` for parallel running.
++ execute `mpiexec -n 16 python main_joint.py ` for parallel running.
 
-or python main_joint.py for serial running.
+or `python main_joint.py` for serial running.
 
 + `python plot.py` for drawing figures.
 

@@ -27,27 +27,20 @@ def main():
     water = 0.001; rf_type = 'P'
     model_rf = ReceiverFunc(rayp,nt,dt,gauss,time_shift,
                             water,rf_type)
-    sigma1 = 1.0; sigma2 = 1.0
-    # set thickness
     
+    
+    
+    
+    # set model parameters
+    thk =  np.array([6,6,13,5,10,30,0]) 
+    vs = np.array([3.2,2.8,3.46,3.3,3.9,4.5,4.7])
     
 
-    thk_real = np.array([20,20,20,0]) 
-    vs_real = np.array([3.0,3.5,4,4.5])
-    
-    #merge the second layers
-    thk_inv =  np.array([20,20,20,0]) 
-    vs_inv = np.array([3.0,3.5,4,4.5])
-    
-    model_swd.set_thk(thk_real)
-    model_rf.set_thk(vs_real)
-    model_real = Joint_RF_SWD(sigma1,sigma2,model_rf,model_swd)
-    x = np.hstack((vs_real,thk_real))
-    drsyn,dssyn,_ = model_real.forward(x)  
+    model_swd.set_thk(thk)
+    model_rf.set_thk(thk)  
 
     # joint inversion model
-    model_swd.set_thk(thk_inv)
-    model_rf.set_thk(vs_inv)
+    sigma1 = 1.0; sigma2 = 1.0
     model = Joint_RF_SWD(sigma1,sigma2,model_rf,model_swd)
 
     # obs data
@@ -55,13 +48,17 @@ def main():
     x = None
     if rank == 0:
         # true model
-        x = np.hstack((vs_inv,thk_inv))
+        x = np.hstack((vs,thk))
+        drsyn,dssyn,_ = model.forward(x)
         dobs = np.zeros((model.ndata))
         
         
+
+        
         dobs[:model.rfmodel.nt] = drsyn
         dobs[model.rfmodel.nt:] = dssyn  
-        np.savetxt("real_data",dobs)
+        np.savetxt("./real_syn",dobs)
+
 
         
     if ncores > 1:
@@ -75,18 +72,26 @@ def main():
     n = len(x)
     boundaries = np.ones((n,2))
 
-    for i in range(len(thk_inv)):
+
+
+
+    
+    # set the search range of inversion
+    for i in range(len(thk)):
+        boundaries[i,0] = vs[i] - vs[i]*0.8
+        boundaries[i,1] = vs[i] + vs[i]*0.8       
+        if boundaries[i,0] < 1.5:
+            boundaries[i,0] = 1.5
+        if boundaries[i,1] > 5:
+            boundaries[i,1] = 5
         
-        boundaries[i,0] = 3
-        boundaries[i,1] = 5
-           
-        boundaries[i + len(thk_inv),0] = 15
-        boundaries[i + len(thk_inv),1] = 25
-                        
+        boundaries[i + len(thk),0] = thk[i] - thk[i]*0.2
+        boundaries[i + len(thk),1] = thk[i] + thk[i]*0.2     
+
     boundaries[-1,:] = 0.0,2.0
               
 
-
+    # set the search range of inversion
     Lrange = [5,10] 
     delta = 0.05
     nsamples = 200
