@@ -48,24 +48,27 @@ boundaries[-1,:] = 0.0,2.0
 figure = plotFigure.plot_bestmodels(np.array([0,80,200]))    
 # np.array([0,65,200]) means the depth interpolation
 # from 0 to 65km, 200 points
-plotFigure.savefig(figure,"best_model.jpeg")
+
+plotFigure.savefig(figure,"best_model.png")
 
 figure = plotFigure.plot_best_fit()
-plotFigure.savefig(figure,"best_syn_fit.jpeg")
+plotFigure.savefig(figure,"best_syn_fit.png")
 
 figure = plotFigure.plot_bestmodels_hit(np.array([2,5,100]),np.array([0,80,100]))
 # np.array([1.8,4,100]) velocity 1.8km/s ~ 4km/s 100 points
-plotFigure.savefig(figure,"best_model_hist.jpeg")
+plotFigure.savefig(figure,"best_model_hist.png")
 
 figure = plotFigure.plot_chain_misfit()
-plotFigure.savefig(figure,"misfit.jpeg")
+plotFigure.savefig(figure,"misfit.png")
+
 
 
 figure = plotFigure.plot_best_fit_hist(np.array([-0.2,0.4,100]),np.array([2.5,4,100]),np.array([2,4,100]))
 # np.array([-0.1,0.2,100])  amplitude of rf 
 # np.array([2,3,100])       velocity of Rc
 # np.array([1.6,2.4,100])    rg 
-plotFigure.savefig(figure,"plot_best_fit_hist.jpeg")
+plotFigure.savefig(figure,"plot_best_fit_hist.png")
 
 figure = plotFigure.plot_var_statisc(boundaries, thk_real, vs_real)
-plotFigure.savefig(figure,"static.jpeg")
+plotFigure.savefig(figure,"static.png")
+
