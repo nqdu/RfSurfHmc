@@ -2,6 +2,7 @@ CC="g++ -O3 -march=native -fPIC -shared"
 FC="gfortran -O3 -march=native -fPIC -shared"
 #FC="gfortran  -fPIC"
 include=`python -m pybind11 --includes`
+
 FFTW_INC="-I/opt/fftw-3.3.10_share/include"
 FFTW_LIB="-L/opt/fftw-3.3.10_share/lib -lfftw3"
 outname="../../librf"`python3-config --extension-suffix`

@@ -5,6 +5,7 @@
 
 
 #rm *.so
+
 rm -rf ./chain_joint*
 rm *.png
 rm real_syn

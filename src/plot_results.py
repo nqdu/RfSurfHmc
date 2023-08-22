@@ -458,7 +458,7 @@ class plotFig(object):
         ax[0].pcolor(self.obs_data.trf, amp_vector, hist_grid_rf.T, cmap=plt.cm.jet )
         ax[1].pcolor(self.obs_data.tRc, velRc_vector, hist_grid_swdRc.T, cmap=plt.cm.jet  )
         ax[2].pcolor(self.obs_data.tRg, velRg_vector, hist_grid_swdRg.T, cmap=plt.cm.jet )
-        
+
 
         
         all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))

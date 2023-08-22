@@ -36,7 +36,6 @@ Usage
 --------------------
 
 + execute `mpiexec -n 16 python main_joint.py ` for parallel running.
- 
 + `python plot.py` for drawing figures.
 
 New Features

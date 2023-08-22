@@ -48,6 +48,7 @@ boundaries[-1,:] = 0.0,2.0
 figure = plotFigure.plot_bestmodels(np.array([0,80,200]))    
 # np.array([0,65,200]) means the depth interpolation
 # from 0 to 65km, 200 points
+
 plotFigure.savefig(figure,"best_model.png")
 
 figure = plotFigure.plot_best_fit()
@@ -61,6 +62,7 @@ figure = plotFigure.plot_chain_misfit()
 plotFigure.savefig(figure,"misfit.png")
 
 
+
 figure = plotFigure.plot_best_fit_hist(np.array([-0.2,0.4,100]),np.array([2.5,4,100]),np.array([2,4,100]))
 # np.array([-0.1,0.2,100])  amplitude of rf 
 # np.array([2,3,100])       velocity of Rc
@@ -69,3 +71,4 @@ plotFigure.savefig(figure,"plot_best_fit_hist.png")
 
 figure = plotFigure.plot_var_statisc(boundaries, thk_real, vs_real)
 plotFigure.savefig(figure,"static.png")
+
