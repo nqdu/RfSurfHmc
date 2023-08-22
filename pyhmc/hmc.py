@@ -40,7 +40,7 @@ class HamitonianMC:
         tmp_order = tmp[idx]
         xcur[int(len(xcur)/2):] = tmp_order        
         
-        print("initial model :",xcur)
+        #print("initial model :",xcur)
         self._save_init_model(xcur)
         return xcur
         
@@ -180,7 +180,7 @@ class HamitonianMC:
 
     def sample(self,nsamples,ndraws,**kwargs):
         # set random seed
-        #np.random.seed(self.seed)
+        np.random.seed(self.seed)
 
         # init model
         x = self._set_initial_model()
