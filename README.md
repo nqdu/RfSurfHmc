@@ -2,6 +2,11 @@
 Joint inversion of Receiver Function and Surface Wave Disperion by Hamiltonian
 Monte Carlo Method
 
+# Pre-update for v1.0
+1. NUTS (No-U-Turn Sampling) will be implemented
+2. Add taper for receiver function.
+3. code reorganize
+
 Requirements
 -------------------
 RFSurfHMC has been built upon a few modern packages for its performance and sustainability, as listed below:
