@@ -455,10 +455,10 @@ class plotFig(object):
         for i in range(len(hist_grid_swdRg[:,0])):
             hist_grid_swdRg[i,:] = hist_grid_swdRg[i,:]  / np.max(hist_grid_swdRg[i,:])
 
-        ax[0].pcolor(self.obs_data.trf, amp_vector, hist_grid_rf.T, cmap=plt.cm.jet, shading='auto'  )
-        ax[1].pcolor(self.obs_data.tRc, velRc_vector, hist_grid_swdRc.T, cmap=plt.cm.jet, shading='auto'  )
-        ax[2].pcolor(self.obs_data.tRg, velRg_vector, hist_grid_swdRg.T, cmap=plt.cm.jet, shading='auto'  )
-        
+        ax[0].pcolor(self.obs_data.trf, amp_vector, hist_grid_rf.T, cmap=plt.cm.jet )
+        ax[1].pcolor(self.obs_data.tRc, velRc_vector, hist_grid_swdRc.T, cmap=plt.cm.jet  )
+        ax[2].pcolor(self.obs_data.tRg, velRg_vector, hist_grid_swdRg.T, cmap=plt.cm.jet )
+
 
         
         all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
@@ -663,7 +663,7 @@ class plotFig(object):
                     
         clist = ['red','white','blue' ]
         newcmp = LinearSegmentedColormap.from_list('chao',clist)
-        map = ax.pcolor(vel_vector, depth_vector, hist_grid, cmap=plt.cm.jet, shading='auto' )
+        map = ax.pcolor(vel_vector, depth_vector, hist_grid, cmap=plt.cm.jet )
         #colorbar_pos = fig.add_axes([0.15,0.25,0.35,0.03])
         colorbar_h = plt.colorbar(mappable=map,cax=None,ax=None,shrink=1,fraction=0.05)
         colorbar_h.ax.tick_params(labelsize = 16)

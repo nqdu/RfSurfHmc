@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import time
 
 
-seed = 19951128
+seed = 991206
 def main():
     # mpi information
     comm = MPI.COMM_WORLD
@@ -24,9 +24,9 @@ def main():
     # receiver function parameters
     rayp = 0.045; dt = 0.4; 
     nt = 125; gauss = 1.5; time_shift = 5.0
-    water = 0.001; rf_type = 'P'
+    water = 0.001; rf_type = 'P'; rf_method = "time"
     model_rf = ReceiverFunc(rayp,nt,dt,gauss,time_shift,
-                            water,rf_type)
+                            water,rf_type, rf_method)
     
     
     

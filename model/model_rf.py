@@ -2,7 +2,7 @@ import numpy as np
 import librf 
 class ReceiverFunc:
     def __init__(self, ray_p, nt, dt, gauss,
-                    time_shift, water_level, rf_type = "p"):
+                    time_shift, water_level, rf_type = "p", method = "time" ):
         """
         Initialize Rceiver Function
         """
@@ -14,6 +14,7 @@ class ReceiverFunc:
         self.water_level = water_level
         self.rf_type = rf_type
         self.t = np.arange(nt) * dt - time_shift
+        self.method = method
 
     def set_obsdata(self, dobs):
         self.dobs = dobs
@@ -61,7 +62,7 @@ class ReceiverFunc:
             input model, [vs thk]
         Returns:
         ==================================================
-        d   ： np.ndarray,shape(self.nt)
+        d   : np.ndarray,shape(self.nt)
             output dispersion data
         """
         # allocate spac
@@ -76,19 +77,22 @@ class ReceiverFunc:
         vp,rho = self.empirical_relation(vs,deriv=False)
     
   
+        qa = thk * 0 + 9999.
+        qb = thk * 0 + 9999.
+        # we don't take the qb/qb into inversion process
 
         # compute rf
-        d = librf.forward(thk, rho, vp, vs, self.ray_p, self.nt, self.dt,
-                        self.gauss, self.time_shift, self.water_level, self.rf_type)
+        if self.method == "time":
+            rf = librf.rf_time(thk,rho,vp,vs,qa,qb,self.ray_p,self.nt,   \
+                                self.dt,self.gauss,self.time_shift,self.rf_type)
+        elif self.method == "freq":
+            rf = librf.rf_freq(thk,rho,vp,vs,qa,qb,self.ray_p,self.nt,   \
+                                self.dt,self.gauss,self.time_shift,water_level,self.rf_type)
+        else:
+            print("wrong calculation method")
 
-        # bug here
-        # sometimes the d will be 0. 
-        # It might cause by the initialization of fortran code
-        if np.sum(d) == 0:
-           d = librf.forward(thk, rho, vp, vs, self.ray_p, self.nt, self.dt,
-                        self.gauss, self.time_shift, self.water_level, self.rf_type) 
 
-        return d
+        return rf
 
     def misfit(self,x):
         """
@@ -100,7 +104,7 @@ class ReceiverFunc:
             input model, [vs thk]
         Returns:
         ==================================================
-        out ： float
+        out : float
              misfit
         """
         d = self.forward(x)
@@ -126,20 +130,45 @@ class ReceiverFunc:
         drda = drda.reshape(len(vs),1)
         dadb = dadb.reshape(len(vs),1)
 
-        # compute gradient
-        d,kvs = librf.adjoint_kernel(thk,rho,vp,vs,
-                    self.ray_p, self.nt, self.dt, self.gauss, self.time_shift,
-                    self.water_level, self.rf_type, 'vs')
-        _,krho = librf.adjoint_kernel(thk,rho,vp,vs,
-                    self.ray_p, self.nt, self.dt, self.gauss, self.time_shift,
-                    self.water_level, self.rf_type, 'rho')
-        _,kvp = librf.adjoint_kernel(thk,rho,vp,vs,
-                    self.ray_p, self.nt, self.dt, self.gauss, self.time_shift,
-                    self.water_level, self.rf_type, 'vp')
 
-        _,kthk = librf.adjoint_kernel(thk,rho,vp,vs,
-                    self.ray_p, self.nt, self.dt, self.gauss, self.time_shift,
-                    self.water_level, self.rf_type, 'thick')        
+
+        qa = thk * 0 + 9999.
+        qb = thk * 0 + 9999.
+        # we don't take the qb/qb into inversion process
+
+        # compute gradient
+        if self.method == "time":
+            d,kvs = librf.rf_par_time(thk,rho,vp,vs,qa,qb,self.ray_p,  \
+                                    self.nt,self.dt,self.gauss,  \
+                                    self.time_shift,self.rf_type,'vs')
+            d,krho = librf.rf_par_time(thk,rho,vp,vs,qa,qb,self.ray_p,  \
+                                    self.nt,self.dt,self.gauss,  \
+                                    self.time_shift,self.rf_type,'rho')                        
+            d,kvp = librf.rf_par_time(thk,rho,vp,vs,qa,qb,self.ray_p,  \
+                                    self.nt,self.dt,self.gauss,  \
+                                    self.time_shift,self.rf_type,'vp')
+            d,kthk = librf.rf_par_time(thk,rho,vp,vs,qa,qb,self.ray_p,  \
+                                    self.nt,self.dt,self.gauss,  \
+                                    self.time_shift,self.rf_type,'h')
+
+        elif self.method == "freq":
+            d,kvs = librf.rf_par_freq(thk,rho,vp,vs,qa,qb,self.ray_p,  \
+                                    self.nt,self.dt,self.gauss,  \
+                                    self.time_shift,self.water_level,self.rf_type,'vs')
+            d,krho = librf.rf_par_freq(thk,rho,vp,vs,qa,qb,self.ray_p,  \
+                                    self.nt,self.dt,self.gauss,  \
+                                    self.time_shift,self.water_level,self.rf_type,'rho')
+            d,kvp = librf.rf_par_freq(thk,rho,vp,vs,qa,qb,self.ray_p,  \
+                                    self.nt,self.dt,self.gauss,  \
+                                    self.time_shift,self.water_level,self.rf_type,'vp')
+            d,kthk = librf.rf_par_freq(thk,rho,vp,vs,qa,qb,self.ray_p,  \
+                                    self.nt,self.dt,self.gauss,  \
+                                    self.time_shift,self.water_level,self.rf_type,'h')                                                                                                            
+        else:
+            print("wrong calculation method")
+
+        # compute gradient
+ 
 
         kernel = kvs + dadb * kvp + drda * dadb * krho  
         kernel_thk = kthk
