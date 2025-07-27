@@ -13,8 +13,8 @@ class Joint_RF_SWD:
     
     def set_obsdata(self,rfobs:np.ndarray, swdobs:np.ndarray):
         self.dobs = np.zeros((self.ndata))
-        self.rfobs = rfobs 
-        self.swdobs = swdobs
+        self.rfobs = rfobs * 1.
+        self.swdobs = swdobs * 1.
 
 
 
@@ -42,9 +42,6 @@ class Joint_RF_SWD:
         drf = np.zeros((n1))
         dswd = np.zeros((n2))
 
-        
-
-    
         drf = self.rfmodel.forward(x)
         #print(drf)
         dswd,flag = self.swdmodel.forward(x)

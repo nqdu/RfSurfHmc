@@ -4,8 +4,10 @@
 namespace py = pybind11;
 using py::arg;
 
-typedef py::array_t<float> ftensor;
-typedef py::array_t<double> dtensor;
+const auto FCST =  py::array::c_style | py::array::forcecast ;
+
+typedef py::array_t<float,FCST> ftensor;
+typedef py::array_t<double,FCST> dtensor;
 typedef std::tuple<dtensor,dtensor,dtensor,dtensor,dtensor,bool> tupledt6;
 typedef std::tuple<dtensor,bool> tuple2;
 

@@ -4,8 +4,8 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/opt/miniconda3/include/python3.8",
-                "/opt/miniconda3/lib/python3.8/site-packages/pybind11/include"
+                "/home/nqdu/.conda/envs/work/include/python3.12",
+                "/home/nqdu/.conda/envs/work/lib/python3.12/site-packages/pybind11/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

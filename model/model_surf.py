@@ -1,5 +1,5 @@
 import numpy as np 
-import libsurf
+from .lib import libsurf
 
 class SurfWD:
     def __init__(self,mode=0,sphere=False,tRc=None,tRg=None,tLc = None,tLg=None):
@@ -11,22 +11,31 @@ class SurfWD:
         self.tRc,self.tRg,self.tLc,self.tLg = None,None,None,None  
         self.nt = 0
         self.ntRc,self.ntRg,self.ntLc,self.ntLg = 0,0,0,0
-        if tRc is not None:  
-            self.tRc = tRc
+        if tRc is not None and len(tRc) > 0:  
+            self.tRc = np.asarray(tRc)
             self.ntRc = len(tRc)
             self.nt += self.ntRc 
-        if tRg is not None: 
-            self.tRg = tRg
+        if tRg is not None  and len(tRg) > 0:  
+            self.tRg = np.asarray(tRg)
             self.ntRg = len(tRg)
             self.nt += self.ntRg 
-        if tLc is not None:
-            self.tLc = tLc
+        if tLc is not None  and len(tLc) > 0:
+            self.tLc = np.asarray(tLc)
             self.ntLc = len(tLc)
             self.nt += self.ntLc
-        if tLg is not None: 
-            self.tLg = tLg 
+        if tLg is not None  and len(tLg) > 0: 
+            self.tLg = np.asarray(tLg)
             self.ntLg = len(tLg)
             self.nt += self.ntLg 
+
+    @classmethod
+    def init(self,**kargs):
+        return SurfWD(
+            tRc=kargs['tRc'],
+            tRg=kargs['tRg'],
+            tLc=kargs['tLc'],
+            tLg=kargs['tLg']
+        )
     
     def set_obsdata(self,dobs):
         # obs data 

@@ -3,6 +3,7 @@ import numpy as np
 import os
 import os.path as op
 from matplotlib.colors import ListedColormap,LinearSegmentedColormap
+import h5py
 
 EPS = 1e-10
 
@@ -51,12 +52,13 @@ class plotFig(object):
     plot figure for hmc output
     '''
 
-    def __init__(self, HMC_output_path = os.getcwd(), chain_num = 0, 
+    def __init__(self, HMC_output_path = os.getcwd(),chain_name = "chain", chain_num = 0, 
                 figure_output_path = os.getcwd(), HMC_calculate_model = None):
-        os.chdir(HMC_output_path)
+        # os.chdir(HMC_output_path)
         self.datapath = HMC_output_path
         self.figpath = figure_output_path
         self.chain_num = chain_num
+        self.name = chain_name
 
         print('Current data path: %s' % self.datapath)
 
@@ -98,7 +100,7 @@ class plotFig(object):
     def savefig(self, fig, filename):
         if fig is not None:
             outfile = op.join(self.figpath, filename)
-            fig.savefig(outfile, bbox_inches="tight")
+            fig.savefig(outfile, bbox_inches="tight",dpi=300)
             plt.close('all')
     
     def find_info_in_chain(self, chain_num, info_type, index):
@@ -113,47 +115,45 @@ class plotFig(object):
             self.depth / self.vs for model
             self.obs_data.rf / self.obs_data_Rc and Rg for syn data
         '''
-        chain_data_folder = "chain_joint" + str(chain_num)
+        filename = f"{self.datapath}/{self.name}." + str(chain_num) + ".h5"
+        fio = h5py.File(filename,"r")
         if info_type == "model":
-            dat_file_name = "model" + str(index) + ".dat"
-
-            data = np.loadtxt(op.join(self.datapath,chain_data_folder,dat_file_name))
+            dat_file_name = f"{index}/model"
+            data = fio[dat_file_name][:]
             self.depth , self.vs = self.unpack_thk_vs(data)
 
         if info_type == "model_init":
-            dat_file_name = "initmodel"  + ".dat"
-
-            data = np.loadtxt(op.join(self.datapath,chain_data_folder,dat_file_name))
+            dat_file_name = "initmodel"
+            data = fio[dat_file_name][:]
             self.depth , self.vs = self.unpack_thk_vs(data)
             
 
         if info_type == "model_mean":
-            dat_file_name = "model" + "mean" + ".dat"
-
-            data = np.loadtxt(op.join(self.datapath,chain_data_folder,dat_file_name))
+            data = fio["mean/model"][:]
             self.depth , self.vs = self.unpack_thk_vs(data)
             
         if info_type == "synthetic":
-            dat_file_name = "synthetic" + str(index) + ".dat"
-            data = np.loadtxt(op.join(self.datapath,chain_data_folder,dat_file_name))
+            data = fio[f'{index}/syn'][:]
             #todo: why there is obs data in synthetic.dat
 
-            self.obs_data.rf, self.obs_data.Rc, self.obs_data.Rg = self.unpack_obs(data[:,1],
+            self.obs_data.rf, self.obs_data.Rc, self.obs_data.Rg = self.unpack_obs(data,
             self.obs_data.ntrf, self.obs_data.ntRc, self.obs_data.ntRg)
 
         if info_type == "synthetic_mean":
-            dat_file_name = "synthetic" + "mean" + ".dat"
-            data = np.loadtxt(op.join(self.datapath,chain_data_folder,dat_file_name))
+            data = fio['mean/syn'][:]
             #todo: why there is obs data in synthetic.dat
 
-            self.obs_data.rf, self.obs_data.Rc, self.obs_data.Rg = self.unpack_obs(data[:,1],
+            self.obs_data.rf, self.obs_data.Rc, self.obs_data.Rg = self.unpack_obs(data,
             self.obs_data.ntrf, self.obs_data.ntRc, self.obs_data.ntRg)
    
         if info_type == "para":
-            dat_file_name = "model" + str(index) + ".dat"
+            dat_file_name = f"{index}/model"
+            data = fio[dat_file_name][:]
 
-            data = np.loadtxt(op.join(self.datapath,chain_data_folder,dat_file_name))
+            # data = np.loadtxt(op.join(self.datapath,chain_data_folder,dat_file_name))
             self.thk , self.vs = self._unpack_thk_vs(data)
+
+        fio.close()
 
     def update_refmodel(self,data):
         self.refmodel = data 
@@ -174,7 +174,7 @@ class plotFig(object):
         '''
 
         fig, ax = plt.subplots(figsize=(12,5))
-        all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
+        all_misfit = np.load(op.join(self.datapath,"misfit.npy"))
         if len(all_misfit.shape) == 1:
             all_misfit = all_misfit.reshape(1,len(all_misfit))
         # row for chains and col for model_index 
@@ -239,7 +239,7 @@ class plotFig(object):
         fig, ax = plt.subplots(3, 1, figsize=(7,10))
 
 
-        all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
+        all_misfit = np.load(op.join(self.datapath,"misfit.npy"))
         if len(all_misfit.shape) == 1:
             all_misfit = all_misfit.reshape(1,len(all_misfit))
         max_chain = len(all_misfit[:,0])
@@ -318,7 +318,7 @@ class plotFig(object):
         fig_num = int(np.ceil(np.sqrt(len(boundaries))))
         fig, ax = plt.subplots(fig_num, fig_num, figsize=(15,15))
 
-        all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
+        all_misfit = np.load(op.join(self.datapath,"misfit.npy"))
         if len(all_misfit.shape) == 1:
             all_misfit = all_misfit.reshape(1,len(all_misfit))
         thebestmisfit = 1e15
@@ -406,7 +406,7 @@ class plotFig(object):
         thebestchain = 0
         thebestindex = 0
 
-        all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
+        all_misfit = np.load(op.join(self.datapath,"misfit.npy"))
         if len(all_misfit.shape) == 1:
             all_misfit = all_misfit.reshape(1,len(all_misfit))
         max_chain = len(all_misfit[:,0])
@@ -461,7 +461,7 @@ class plotFig(object):
 
 
         
-        all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
+        all_misfit = np.load(op.join(self.datapath,"misfit.npy"))
         if len(all_misfit.shape) == 1:
             all_misfit = all_misfit.reshape(1,len(all_misfit))
         max_chain = len(all_misfit[:,0])
@@ -531,7 +531,7 @@ class plotFig(object):
         thebestchain = 0
         thebestindex = 0
 
-        all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
+        all_misfit = np.load(op.join(self.datapath,"misfit.npy"))
         if len(all_misfit.shape) == 1:
             all_misfit = all_misfit.reshape(1,len(all_misfit))
         max_chain = len(all_misfit[:,0])
@@ -601,7 +601,7 @@ class plotFig(object):
         thebestchain = 0
         thebestindex = 0
 
-        all_misfit = np.loadtxt(op.join(self.datapath,"misfit.dat"))
+        all_misfit = np.load(op.join(self.datapath,"misfit.npy"))
         if len(all_misfit.shape) == 1:
             all_misfit = all_misfit.reshape(1,len(all_misfit))
         max_chain = len(all_misfit[:,0])

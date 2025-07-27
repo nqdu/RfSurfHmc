@@ -89,9 +89,16 @@ int _surfdisp(float *thk,float *vp,float *vs,float *rho,
     int ierr;
     surfdisp96_(thk,vp,vs,rho,nlayer,ifsph,iwave,mode+1,igr,kmax,t,cg,&ierr);
 
-    if(ierr == 1){
-        return ierr;
-    } 
+    // recompute if ierr !=0
+    if(ierr != 0){
+        for(int i = 0; i < kmax; i++){
+            if(cg[i] == 0.0 || std:: isnan(cg[i])) {
+                surfdisp96_(thk,vp,vs,rho,nlayer,ifsph,iwave,mode+1,igr,1,&t[i],&cg[i],&ierr);
+                if(ierr !=0) return ierr;
+            }
+        }
+    }
+
     if(sphere == true && keep_flat == false){
         for(int i=0;i<kmax;i++){
             cg[i] = _flat2sphere(t[i],cg[i],wavetype);

@@ -1,47 +1,47 @@
 from matplotlib.colors import BoundaryNorm
 import numpy as np
-from pyhmc.hmc import HMCSample
+from pyhmc.hmc import HamitonianMC
 from mpi4py import MPI
 from model.model_rf import ReceiverFunc
 from model.model_surf import SurfWD
 from model.model_rf_swd_vs_thk import Joint_RF_SWD
 import matplotlib.pyplot as plt 
 import time
+import yaml
+import os
 
 
-seed = 991206
 def main():
     # mpi information
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     ncores = comm.Get_size()
 
+    # load yaml files
+    with open("param.yaml","r") as f:
+        param = yaml.safe_load(f)
+
     # surf parameters
-    tRc = np.linspace(5,40,36)
-    tRg = tRc.copy()
-    model_swd = SurfWD(tRc=tRc,tRg=tRg)
+    sparam = param['swd']
+    model_swd = SurfWD.init(**sparam)
 
     # receiver function parameters
-    rayp = 0.045; dt = 0.4; 
-    nt = 125; gauss = 1.5; time_shift = 5.0
-    water = 0.001; rf_type = 'P'; rf_method = "time"
-    model_rf = ReceiverFunc(rayp,nt,dt,gauss,time_shift,
-                            water,rf_type, rf_method)
-    
-    
-    
+    rparam = param['rf']
+    model_rf = ReceiverFunc.init(**rparam)
     
     # set model parameters
-    thk =  np.array([6,6,13,5,10,30,0]) 
-    vs = np.array([3.2,2.8,3.46,3.3,3.9,4.5,4.7])
-    
-
+    thk = np.asarray(param['true_model']['thk'])
+    vs = np.asarray(param['true_model']['vs'])
     model_swd.set_thk(thk)
     model_rf.set_thk(thk)  
 
     # joint inversion model
     sigma1 = 1.0; sigma2 = 1.0
     model = Joint_RF_SWD(sigma1,sigma2,model_rf,model_swd)
+
+    # get output dir
+    outdir = param['hmc']['OUTPUT_DIR']
+    os.makedirs(outdir,exist_ok=True)
 
     # obs data
     dobs = None
@@ -50,33 +50,20 @@ def main():
         # true model
         x = np.hstack((vs,thk))
         drsyn,dssyn,_ = model.forward(x)
-        dobs = np.zeros((model.ndata))
-        
-        
-
-        
+        dobs = np.zeros((model.ndata))        
         dobs[:model.rfmodel.nt] = drsyn
         dobs[model.rfmodel.nt:] = dssyn  
-        np.savetxt("./real_syn",dobs)
+        np.save(f"{outdir}/real_syn.npy",dobs)
 
-
-        
-    if ncores > 1:
-        dobs = comm.bcast(dobs)
-        x = comm.bcast(x)
-        comm.barrier()
+    # bcast to other procs
+    dobs = comm.bcast(dobs)
+    x = comm.bcast(x)
+    nt = model.rfmodel.nt
     model.set_obsdata(dobs[:nt],dobs[nt:])
 
-    # parameters
-    save_folder = "chain_joint"
+    # set the search range of inversion
     n = len(x)
     boundaries = np.ones((n,2))
-
-
-
-
-    
-    # set the search range of inversion
     for i in range(len(thk)):
         boundaries[i,0] = vs[i] - vs[i]*0.8
         boundaries[i,1] = vs[i] + vs[i]*0.8       
@@ -87,32 +74,23 @@ def main():
         
         boundaries[i + len(thk),0] = thk[i] - thk[i]*0.2
         boundaries[i + len(thk),1] = thk[i] + thk[i]*0.2     
-
     boundaries[-1,:] = 0.0,2.0
-              
 
-    # set the search range of inversion
-    Lrange = [5,10] 
-    delta = 0.05
-    nsamples = 200
-    ndraws = 0
+    # initialize HMC sampler
+    hparam = param['hmc']
+    chain = HamitonianMC.init(model,boundaries,rank,**hparam)
+    nsamples = chain.nsamples
+    tmp = chain.sample()
 
-    
-    if ncores == 1:
-        misfit = HMCSample(model,nsamples,ndraws,boundaries,
-                        delta,Lrange,seed,myrank=rank,
-                        save_folder=save_folder)
+    # gather misfits
+    if rank == 0:
+        misfit = np.zeros((ncores,nsamples))
     else:
         misfit = None
-        tmp = HMCSample(model,nsamples,ndraws,boundaries,
-                            delta,Lrange,seed+rank,myrank=rank,
-                            save_folder=save_folder)
-        if rank == 0:
-            misfit = np.zeros((ncores,nsamples))
-        comm.Gather(tmp,misfit,root=0)
-    
+    comm.Gather(tmp,misfit,root=0)
+
     if rank == 0:
-        np.savetxt("misfit.dat",misfit)
+        np.save(f"{outdir}/misfit.npy",misfit)
 
 if __name__ == "__main__":
     tic = time.time()
