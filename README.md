@@ -11,6 +11,7 @@ name | version|
 |[Pybind11](https://github.com/pybind/pybind11) | >=0.4| 
 |[FFTW3](https://www.fftw.org/) | >=3.3 |
 |[GCC](https://gcc.gnu.org/)| >=7.5|
+|[CMAKE](https://cmake.org/)| >=3.10.0|
 |mpi4py| >=3.0 |
 
 Installation 
@@ -19,23 +20,28 @@ Installation
     - mpi4py
     - pybind11
     - numpy
+    - h5py
+    - pyyaml
 we recommand install those packages by anaconda
 ```shell
-conda create -n hmc_inv python=3.7
-conda install mpi4py pybind11 numpy 
+conda create -n hmc_inv python=3.9
+conda install mpi4py pybind11-global numpy h5py pyyaml
 ```
 
-+ This package requires fftw also. Download and install the fftw by the instruction fftw.org
-Modify the compile.sh in `./src/RF` and `./src/SWD`, and subsitude the var `FFTW_INC` and `FFTW_LIB`
-
-    + Please note that the receivcer function moduld needs the dynamic fftw library. You might need to complie the fftw by "--enable-shared=yes"
-
-+ Then run `compile.sh` to run this code
++ Then use the following to compile the code
+```
+mkdir -p build
+cd build
+cmake .. 
+make -j4 
+make install
+```
 
 Usage 
 --------------------
-
-+ execute `mpiexec -n 16 python main_joint.py ` for parallel running.
++ set your parameters in `param.yaml`
++ For naive HMC, try: `mpiexec -n 4 python main_base.py ` for parallel running
++ For HMC with dual averaging ([hoffman 2014](https://jmlr.org/papers/volume15/hoffman14a/hoffman14a.pdf),algorithm 5), try `mpiexec -n 4 python main_DA.py `
 + `python plot.py` for drawing figures.
 
 New Features
@@ -48,6 +54,7 @@ New Features
 Update 
 -------------------
 + 2023-08-23 we update the forward calculation of receiver function. RF could be calculated in time domain or frequency domain either.
++ 2025-07-26 update pybind11 interface, and add dual averaging, which significantly reduces the need for manual hyperparameter tunings on `dt` and `L`.
 
 References 
 -------------------

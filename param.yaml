@@ -1,0 +1,50 @@
+rf:
+  ray_p: 0.045
+  dt: 0.4
+  nt: 125
+  gauss: 1.5
+  time_shift: 5.
+  water_level: 0.001
+  type: P  # P or S
+  method: "freq"   # time or freq, freq is more stable
+
+  # weight factor
+  weight: 1.
+
+swd:
+  # period used for Rayleigh phase/group, and Love wave phase/group
+  tRc: [ 5.,  6.,  7.,  8.,  9., 10., 11., 12., 13., 14., 15., 16., 17.,
+       18., 19., 20., 21., 22., 23., 24., 25., 26., 27., 28., 29., 30.,
+       31., 32., 33., 34., 35., 36., 37., 38., 39., 40.]
+  tRg: [ 5.,  6.,  7.,  8.,  9., 10., 11., 12., 13., 14., 15., 16., 17.,
+       18., 19., 20., 21., 22., 23., 24., 25., 26., 27., 28., 29., 30.,
+       31., 32., 33., 34., 35., 36., 37., 38., 39., 40.]
+  tLc: []
+  tLg: []
+
+
+  # weight factor
+  weight: 1.
+
+true_model:
+  thk: [6.,6,13.,5,10,30,0]
+  vs: [3.2,2.8,3.46,3.3,3.9,4.5,4.7]
+
+
+## HMC 
+hmc:
+  seed: 991206
+  nsamples: 800
+  ndraws: 200
+  Lrange: [5,20] # only used for HMCBase
+  dt: 0.1
+  nbest: 10  # average the best (nbest) models to get final result
+
+  # parameters for dual averaging
+  # in this case dt will be tuned according to the following
+  target_ratio: 0.65
+  L0: 10 
+
+  # output name
+  name: "chain_joint"
+  OUTPUT_DIR: ./results/

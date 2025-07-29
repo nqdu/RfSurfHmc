@@ -5,29 +5,28 @@ implicit none
 integer,parameter :: dp = c_double, dcp = c_double_complex
 private
 public :: cal_rf_par_time,cal_rf_time,cal_rf_freq,cal_rf_par_freq
+public :: cal_rf_par_time_all,cal_rf_par_freq_all
 
 contains 
 subroutine cal_rf_par_time(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
                             ray_p,f0,time_shift,&
-                            rf_type,par_type,rcv_fun,rcv_fun_p)&
+                            rf_type,ipar,rcv_fun,rcv_fun_p)&
                             bind(c,name='cal_rf_par_time_')
   implicit none
   real(dp),value,intent(in)           :: ray_p,dt,f0, time_shift
-  integer(c_int), value, intent(in)   :: nlayer, rf_type, nt,par_type
+  integer(c_int), value, intent(in)   :: nlayer, rf_type, nt,ipar
   real(dp), intent(inout)             :: rcv_fun_p(nt,nlayer),rcv_fun(nt)
   real(dp), intent(in)                :: thk(nlayer), rho(nlayer),vp(nlayer), &
                                           vs(nlayer),qa(nlayer),qb(nlayer)
   
   ! local
-  integer(c_int)                      :: nft, n2,  i, ilayer_inv,ilayer, it, par_layer
-  complex(dcp), dimension(4,4)        :: matrix_E_inv, a_syn, a_syn_m,matrix_E_inv_par
-  complex(dcp)                        :: matrix_ones(4,4),omega
+  integer(c_int)                      :: nft, n2, it, par_layer
+  complex(dcp)                        :: omega
   complex(dcp)                        :: imag_i,alpha(nlayer),beta(nlayer)
   complex(dcp), allocatable           :: R22(:), R21(:),R21_square(:)
   complex(dcp), allocatable           :: R22_m(:,:), R21_m(:,:),num(:)
   real(dp),parameter                  :: PI = atan(1.0) * 4.0
   real(dp),dimension(:),allocatable   :: rcv_tmp,ux,uz
-  complex(dcp)                        :: all_a(4,4,nlayer),all_a_m(4,4,nlayer)
 
   ! padding to 2^n , total number of data point will be nft
   call nextpow2(nt,nft)
@@ -35,14 +34,8 @@ subroutine cal_rf_par_time(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
 
   ! allcoate space
   allocate(R22(n2), R21(n2))
-  allocate( R22_m(n2,nlayer), R21_m(n2,nlayer))
+  allocate( R22_m(nlayer,n2), R21_m(nlayer,n2))
   allocate(rcv_tmp(nft),ux(nft),uz(nft),R21_square(n2),num(n2))
-
-  ! initialize identity matrix
-  matrix_ones(:,:) = (0.0_dp,0.0_dp)
-  do i=1,4 
-    matrix_ones(i,i) = (1.0_dp,0.0_dp)
-  enddo
 
   ! add attenuation
   imag_i = (0.0_dp,1.0_dp)
@@ -50,93 +43,12 @@ subroutine cal_rf_par_time(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
   beta = vs * (1.0 + imag_i / (2.0 * qb) + 1.0 / (8.0 * qb**2) )
 
  ! compute rf in frequency domain
-  imag_i = (0.0_dp,1.0_dp)
   do it = 1, n2
     omega = 1.0_dp / nft / dt * (it - 1) * 2.0_dp * PI 
 
-    ! prepare all the matirx which are needed
-    do ilayer = 1, nlayer - 1
-      call cal_matrix_a(omega,ray_p,thk(ilayer),alpha(ilayer),&
-                        beta(ilayer),rho(ilayer),all_a(:,:,ilayer))
-      call cal_matrix_a_par(omega,ray_p,thk(ilayer),alpha(ilayer),&
-                        beta(ilayer),rho(ilayer),all_a_m(:,:,ilayer),par_type)
-      if(par_type == 3) then
-        all_a_m(:,:,ilayer) = all_a_m(:,:,ilayer) *  beta(ilayer) / vs(ilayer);
-      else if(par_type == 2) then 
-        all_a_m(:,:,ilayer) = all_a_m(:,:,ilayer) *  alpha(ilayer) / vp(ilayer);
-      endif
-    enddo
-
-    ! prepare Einv and Einv_par
-    call cal_E_inv(omega,ray_p,alpha(nlayer),beta(nlayer),&
-                  rho(nlayer),matrix_E_inv)
-    call cal_E_inv_par(omega,ray_p,alpha(nlayer),beta(nlayer),&
-                        rho(nlayer),matrix_E_inv_par,par_type)
-    if(par_type == 3) then
-      matrix_E_inv_par = matrix_E_inv_par *  beta(nlayer) / vs(nlayer);
-    else if(par_type == 2) then 
-      matrix_E_inv_par = matrix_E_inv_par *  alpha(nlayer) / vp(nlayer);
-    endif
-    do par_layer = 1,nlayer 
-      a_syn(:,:) = matrix_ones(:,:)
-      do ilayer = 1, nlayer - 1
-        ilayer_inv = nlayer - ilayer
-        a_syn = matmul(a_syn,all_a(:,:,ilayer_inv))
-      enddo
-    enddo 
-    a_syn = matmul(matrix_E_inv,a_syn)
-
-    if (rf_type == 1) then
-      R22(it) = a_syn(2,2) * imag_i
-      R21(it) = a_syn(2,1) 
-    else
-      R22(it) = -a_syn(1,1) * imag_i
-      R21(it) = a_syn(1,2) 
-    endif  
-
-    ! remove NAN
-    if (isnan(abs((R22(it))))) then
-      R22(it) = (0.0_dp,0.0_dp)
-    endif              
-    if (isnan(abs((R21(it))))) then
-        R21(it) = (0.0_dp,0.0_dp)
-    endif
-
-    ! compute partial derivatives
-    do par_layer = 1, nlayer
-      a_syn_m(:,:) = matrix_ones(:,:)
-
-      do ilayer = 1, nlayer - 1
-        ilayer_inv = nlayer - ilayer
-        if (par_layer == ilayer_inv) then
-          a_syn_m = matmul(a_syn_m,all_a_m(:,:,ilayer_inv))
-        else
-          a_syn_m = matmul(a_syn_m,all_a(:,:,ilayer_inv))
-        endif
-      enddo
-
-      if (par_layer == nlayer) then
-        a_syn_m = matmul(matrix_E_inv_par,a_syn_m)
-      else
-        a_syn_m = matmul(matrix_E_inv,a_syn_m)
-      endif
-
-      if (rf_type == 1) then
-        R22_m(it,par_layer) = a_syn_m(2,2) * imag_i  
-        R21_m(it,par_layer) = a_syn_m(2,1)
-      else
-        R22_m(it,par_layer) = -a_syn_m(1,1) * imag_i 
-        R21_m(it,par_layer) = a_syn_m(1,2)
-      endif                    
-      
-      ! remove NAN
-      if (isnan(abs(R22_m(it,par_layer)))) then
-          R22_m(it,par_layer) = (0.0_dp,0.0_dp)
-      endif                
-      if (isnan(abs(R21_m(it,par_layer)))) then
-          R21_m(it,par_layer) = (0.0_dp,0.0_dp)
-      endif
-    enddo ! end par_layer
+    call cal_response_par(omega,ray_p,thk,alpha,beta,vp,vs,&
+                          rho,nlayer,ipar,rf_type,R21(it),&
+                          R22(it),R21_m(:,it),R22_m(:,it))
   enddo ! end it
 
   ! compute RF 
@@ -151,7 +63,7 @@ subroutine cal_rf_par_time(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
 
   ! compute derivative
   do par_layer = 1, nlayer
-    num = R22_m(:,par_layer) * R21(:)  -R21_m(:,par_layer) * R22(:) 
+    num = R22_m(par_layer,:) * R21(:)  -R21_m(par_layer,:) * R22(:) 
     call irfft(num,ux,nft)
     call deconit(ux,uz,nft,dt,time_shift,f0,rcv_tmp)
     rcv_fun_p(:,par_layer) = rcv_tmp(1:nt)
@@ -160,6 +72,74 @@ subroutine cal_rf_par_time(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
   deallocate(R22,R21,R22_m, R21_m,rcv_tmp,ux,uz,R21_square,num)
 
 end subroutine cal_rf_par_time
+
+subroutine cal_rf_par_time_all(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
+                            ray_p,f0,time_shift,&
+                            rf_type,rcv_fun,rcv_fun_p)&
+                            bind(c,name='cal_rf_par_time_all_')
+  implicit none
+  integer(c_int),parameter            :: npars = 4
+  real(dp),value,intent(in)           :: ray_p,dt,f0, time_shift
+  integer(c_int), value, intent(in)   :: nlayer, rf_type, nt
+  real(dp), intent(inout)             :: rcv_fun_p(nt,nlayer,npars),rcv_fun(nt)
+  real(dp), intent(in)                :: thk(nlayer), rho(nlayer),vp(nlayer), &
+                                          vs(nlayer),qa(nlayer),qb(nlayer)
+  
+  ! local
+  integer(c_int)                      :: nft, n2, it, par_layer,ipar
+  complex(dcp)                        :: omega
+  complex(dcp)                        :: imag_i,alpha(nlayer),beta(nlayer)
+  complex(dcp), allocatable           :: R22(:), R21(:),R21_square(:)
+  complex(dcp), allocatable           :: R22_m(:,:,:), R21_m(:,:,:),num(:)
+  real(dp),parameter                  :: PI = atan(1.0_dp) * 4.0_dp
+  real(dp),dimension(:),allocatable   :: rcv_tmp,ux,uz
+
+  ! padding to 2^n , total number of data point will be nft
+  call nextpow2(nt,nft)
+  n2 = nft / 2 + 1  
+
+  ! allcoate space
+  allocate(R22(n2), R21(n2))
+  allocate( R22_m(nlayer,npars,n2), R21_m(nlayer,npars,n2))
+  allocate(rcv_tmp(nft),ux(nft),uz(nft),R21_square(n2),num(n2))
+
+  ! add attenuation
+  imag_i = (0.0_dp,1.0_dp)
+  alpha = vp * (1.0 + imag_i / (2.0 * qa) + 1.0 / (8.0 * qa**2) )
+  beta = vs * (1.0 + imag_i / (2.0 * qb) + 1.0 / (8.0 * qb**2) )
+
+ ! compute rf in frequency domain
+  do it = 1, n2
+    omega = 1.0_dp / nft / dt * (it - 1) * 2.0_dp * PI 
+
+    call cal_response_par_all(omega,ray_p,thk,alpha,beta,&
+                            vp,vs,rho,nlayer,rf_type,R21(it),&
+                            R22(it),R21_m(:,:,it),R22_m(:,:,it))
+  enddo ! end it
+
+  ! compute RF 
+  call irfft(R22,ux,nft)
+  call irfft(R21,uz,nft)
+  call deconit(ux,uz,nft,dt,time_shift,f0,rcv_tmp)
+  rcv_fun(:) = rcv_tmp(1:nt)
+
+  ! comptue R21_square
+  R21_square = R21**2
+  call irfft(R21_square,uz,nft)
+
+  ! compute derivative
+  do ipar = 1,npars
+    do par_layer = 1, nlayer
+      num = R22_m(par_layer,ipar,:) * R21(:)  -R21_m(par_layer,ipar,:) * R22(:) 
+      call irfft(num,ux,nft)
+      call deconit(ux,uz,nft,dt,time_shift,f0,rcv_tmp)
+      rcv_fun_p(:,par_layer,ipar) = rcv_tmp(1:nt)
+    enddo
+  enddo
+
+  deallocate(R22,R21,R22_m, R21_m,rcv_tmp,ux,uz,R21_square,num)
+
+end subroutine cal_rf_par_time_all
 
 subroutine cal_rf_time(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
                         ray_p,f0,time_shift,&
@@ -174,8 +154,7 @@ subroutine cal_rf_time(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
   
   ! local
   complex(dcp)                 :: alpha(nlayer),beta(nlayer)
-  complex(dcp), dimension(4,4) :: matrix_E_inv,a_syn, a_syn1
-  integer(c_int)               :: ilayer,nft,it,n2,i,ilayer_inv
+  integer(c_int)               :: nft,it,n2
   complex(dcp),allocatable     :: R22(:),R21(:)
   real(dp),allocatable         :: ux(:),uz(:),rcv_tmp(:)
   complex(dcp)                 :: omega
@@ -195,37 +174,7 @@ subroutine cal_rf_time(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
   do it = 1, n2 
     omega = (1.0/ dt / nft) * (it - 1) * 2 * pi
 
-    ! initialize the I matrix
-    a_syn = (0.0_dp,0.0_dp)
-    do i = 1, 4
-      a_syn(i,i) = (1.0_dp,0.0_dp)
-    enddo
-
-    ! multiple all the things from the bottom
-    do ilayer = 1, nlayer - 1
-      ilayer_inv = nlayer - ilayer
-      call cal_matrix_a(omega,ray_p,thk(ilayer_inv),alpha(ilayer_inv),&
-                        beta(ilayer_inv),rho(ilayer_inv),a_syn1)
-      a_syn = matmul(a_syn,a_syn1)
-    enddo
-
-    ! compute E_inv in half space 
-    call cal_E_inv(omega,ray_p,alpha(nlayer),&
-                    beta(nlayer),rho(nlayer),matrix_E_inv)
-    a_syn = matmul(matrix_E_inv,a_syn)
-
-    ! compute H/Z components 
-    if (rf_type == 1) then
-      R22(it) = a_syn(2,2) * imag_i
-      R21(it) = a_syn(2,1) 
-      !print*,a_syn(2,2) - a_syn(2,3) * tmp,a_syn(2,2),a_syn(2,3) * tmp
-    elseif (rf_type == 2) then
-      R22(it) = -a_syn(1,1) * imag_i
-      R21(it) = a_syn(1,2)
-    else
-      write(*,*) "error type!!"
-      stop
-    endif
+    call cal_response(omega,ray_p,thk,alpha,beta,rho,nlayer,rf_type,R21(it),R22(it))
   enddo
 
   ! get u/z in time domain
@@ -254,8 +203,7 @@ subroutine cal_rf_freq(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
 
   ! local
   complex(dcp)                 :: alpha(nlayer),beta(nlayer)
-  complex(dcp), dimension(4,4) :: matrix_E_inv,a_syn, a_syn1
-  integer(c_int)               :: ilayer,nft,it,n2,i,ilayer_inv
+  integer(c_int)               :: nft,it,n2
   complex(dcp),allocatable     :: R22(:),R21(:),rcv_spec(:)
   real(dp),allocatable        :: rcv_tmp(:),gauss(:),fai(:),wa(:),w(:)
   complex(dcp)                 :: omega
@@ -281,37 +229,7 @@ subroutine cal_rf_freq(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
     w(it) = (1.0/ dt / nft) * (it - 1) * 2 * pi
     omega = cmplx(w(it),-sigma,kind=dcp)
 
-    ! initialize the I matrix
-    a_syn = (0.0_dp,0.0_dp)
-    do i = 1, 4
-      a_syn(i,i) = (1.0_dp,0.0_dp)
-    enddo
-
-    ! multiple all the things from the bottom
-    do ilayer = 1, nlayer - 1
-      ilayer_inv = nlayer - ilayer
-      call cal_matrix_a(omega,ray_p,thk(ilayer_inv),alpha(ilayer_inv),&
-                        beta(ilayer_inv),rho(ilayer_inv),a_syn1)
-      a_syn = matmul(a_syn,a_syn1)
-    enddo
-
-    ! compute E_inv in half space 
-    call cal_E_inv(omega,ray_p,alpha(nlayer),&
-                    beta(nlayer),rho(nlayer),matrix_E_inv)
-    a_syn = matmul(matrix_E_inv,a_syn)
-
-    ! compute H/Z components 
-    if (rf_type == 1) then
-      R22(it) = a_syn(2,2) * imag_i
-      R21(it) = a_syn(2,1) 
-      !print*,a_syn(2,2) - a_syn(2,3) * tmp,a_syn(2,2),a_syn(2,3) * tmp
-    elseif (rf_type == 2) then
-      R22(it) = -a_syn(1,1) * imag_i
-      R21(it) = a_syn(1,2)
-    else
-      write(*,*) "error type!!"
-      stop
-    endif
+    call cal_response(omega,ray_p,thk,alpha,beta,rho,nlayer,rf_type,R21(it),R22(it))
   enddo
 
   ! compute gaussian 
@@ -339,23 +257,20 @@ end subroutine cal_rf_freq
 
 subroutine cal_rf_par_freq(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
                           ray_p,f0,t0,water,&
-                          rf_type,par_type,rcv_fun,rcv_fun_p)&
+                          rf_type,ipar,rcv_fun,rcv_fun_p)&
                           bind(c,name='cal_rf_par_freq_')
   implicit none
   real(dp),value,intent(in)           :: ray_p,dt,f0,t0,water
-  integer(c_int), value, intent(in)   :: nlayer, rf_type, nt,par_type
+  integer(c_int), value, intent(in)   :: nlayer, rf_type, nt,ipar
   real(dp), intent(inout)             :: rcv_fun_p(nt,nlayer),rcv_fun(nt)
   real(dp), intent(in)                :: thk(nlayer), rho(nlayer),vp(nlayer), &
                                           vs(nlayer),qa(nlayer),qb(nlayer)
 
   ! local
-  integer(c_int)                      :: nft, n2,i, ilayer_inv,ilayer, it, par_layer
-  complex(dcp), dimension(4,4)        :: matrix_E_inv, a_syn, a_syn_m,matrix_E_inv_par
-  complex(dcp)                        :: matrix_ones(4,4)
+  integer(c_int)                      :: nft, n2,it, par_layer
   complex(dcp)                        :: alpha(nlayer),beta(nlayer)
   complex(dcp), allocatable           :: R22(:), R21(:),R21_square(:)
   complex(dcp), allocatable           :: R22_m(:,:), R21_m(:,:),rcv_spec(:)
-  complex(dcp)                        :: all_a(4,4,nlayer),all_a_m(4,4,nlayer)
   real(dp),allocatable                :: rcv_tmp(:),gauss(:),fai(:),wa(:),w(:)
   complex(dcp)                        :: omega
   real(dp)                            :: sigma,wmax
@@ -369,13 +284,7 @@ subroutine cal_rf_par_freq(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
   ! allcoate space
   allocate(R22(n2), R21(n2),rcv_tmp(nft),&
           gauss(n2),wa(n2),w(n2),rcv_spec(n2),fai(n2))
-  allocate(R22_m(n2,nlayer), R21_m(n2,nlayer),R21_square(n2))
-
-  ! initialize identity matrix
-  matrix_ones(:,:) = (0.0_dp,0.0_dp)
-  do i=1,4 
-    matrix_ones(i,i) = (1.0_dp,0.0_dp)
-  enddo
+  allocate(R22_m(nlayer,n2), R21_m(nlayer,n2),R21_square(n2))
 
   ! add attenuation
   alpha = vp * (1.0 + imag_i / (2.0 * qa) + 1.0 / (8.0 * qa**2) )
@@ -388,89 +297,9 @@ subroutine cal_rf_par_freq(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
     w(it) = 1.0_dp / nft / dt * (it - 1) * 2.0_dp * PI 
     omega = cmplx(w(it),-sigma,kind=dcp)
 
-    ! prepare all the matirx which are needed
-    do ilayer = 1, nlayer - 1
-      call cal_matrix_a(omega,ray_p,thk(ilayer),alpha(ilayer),&
-                        beta(ilayer),rho(ilayer),all_a(:,:,ilayer))
-      call cal_matrix_a_par(omega,ray_p,thk(ilayer),alpha(ilayer),&
-                        beta(ilayer),rho(ilayer),all_a_m(:,:,ilayer),par_type)
-      if(par_type == 3) then
-        all_a_m(:,:,ilayer) = all_a_m(:,:,ilayer) *  beta(ilayer) / vs(ilayer);
-      else if(par_type == 2) then 
-        all_a_m(:,:,ilayer) = all_a_m(:,:,ilayer) *  alpha(ilayer) / vp(ilayer);
-      endif
-    enddo
-
-    ! prepare Einv and Einv_par
-    call cal_E_inv(omega,ray_p,alpha(nlayer),beta(nlayer),&
-                  rho(nlayer),matrix_E_inv)
-    call cal_E_inv_par(omega,ray_p,alpha(nlayer),beta(nlayer),&
-                        rho(nlayer),matrix_E_inv_par,par_type)
-    if(par_type == 3) then
-      matrix_E_inv_par = matrix_E_inv_par *  beta(nlayer) / vs(nlayer);
-    else if(par_type == 2) then 
-      matrix_E_inv_par = matrix_E_inv_par *  alpha(nlayer) / vp(nlayer);
-    endif
-    do par_layer = 1,nlayer 
-      a_syn(:,:) = matrix_ones(:,:)
-      do ilayer = 1, nlayer - 1
-        ilayer_inv = nlayer - ilayer
-        a_syn = matmul(a_syn,all_a(:,:,ilayer_inv))
-      enddo
-    enddo 
-    a_syn = matmul(matrix_E_inv,a_syn)
-
-    if (rf_type == 1) then
-      R22(it) = a_syn(2,2) * imag_i
-      R21(it) = a_syn(2,1) 
-    else
-      R22(it) = -a_syn(1,1) * imag_i
-      R21(it) = a_syn(1,2) 
-    endif  
-
-    ! remove NAN
-    if (isnan(abs((R22(it))))) then
-      R22(it) = (0.0_dp,0.0_dp)
-    endif              
-    if (isnan(abs((R21(it))))) then
-        R21(it) = (0.0_dp,0.0_dp)
-    endif
-
-    ! compute partial derivatives
-    do par_layer = 1, nlayer
-      a_syn_m(:,:) = matrix_ones(:,:)
-
-      do ilayer = 1, nlayer - 1
-        ilayer_inv = nlayer - ilayer
-        if (par_layer == ilayer_inv) then
-          a_syn_m = matmul(a_syn_m,all_a_m(:,:,ilayer_inv))
-        else
-          a_syn_m = matmul(a_syn_m,all_a(:,:,ilayer_inv))
-        endif
-      enddo
-
-      if (par_layer == nlayer) then
-        a_syn_m = matmul(matrix_E_inv_par,a_syn_m)
-      else
-        a_syn_m = matmul(matrix_E_inv,a_syn_m)
-      endif
-
-      if (rf_type == 1) then
-        R22_m(it,par_layer) = a_syn_m(2,2) * imag_i  
-        R21_m(it,par_layer) = a_syn_m(2,1)
-      else
-        R22_m(it,par_layer) = -a_syn_m(1,1) * imag_i 
-        R21_m(it,par_layer) = a_syn_m(1,2)
-      endif                    
-      
-      ! remove NAN
-      if (isnan(abs(R22_m(it,par_layer)))) then
-          R22_m(it,par_layer) = (0.0_dp,0.0_dp)
-      endif                
-      if (isnan(abs(R21_m(it,par_layer)))) then
-          R21_m(it,par_layer) = (0.0_dp,0.0_dp)
-      endif
-    enddo ! end par_layer
+    call cal_response_par(omega,ray_p,thk,alpha,beta,vp,vs,rho,&
+                          nlayer,ipar,rf_type,R21(it),R22(it),&
+                          R21_m(:,it),R22_m(:,it))
   enddo ! end it
 
   ! compute gaussian 
@@ -498,7 +327,7 @@ subroutine cal_rf_par_freq(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
 
   ! RF derivative in frequency domain
   do par_layer = 1,nlayer
-    rcv_spec = conjg(R21_square) * (R22_m(:,par_layer) * R21 - R21_m(:,par_layer) * R22) &
+    rcv_spec = conjg(R21_square) * (R22_m(par_layer,:) * R21 - R21_m(par_layer,:) * R22) &
                *gauss * exp(-imag_i * w * t0) / fai
     call irfft(rcv_spec,rcv_tmp,nft)
     do it = 1,nt
@@ -510,6 +339,372 @@ subroutine cal_rf_par_freq(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
   deallocate(gauss,rcv_spec)
 
 end subroutine cal_rf_par_freq
+
+subroutine cal_rf_par_freq_all(thk,vp,vs,rho,qa,qb,nlayer,nt,dt,&
+                          ray_p,f0,t0,water,&
+                          rf_type,rcv_fun,rcv_fun_p)&
+                          bind(c,name='cal_rf_par_freq_all_')
+  implicit none
+  integer(c_int),parameter            :: npars = 4
+  real(dp),value,intent(in)           :: ray_p,dt,f0,t0,water
+  integer(c_int), value, intent(in)   :: nlayer, rf_type, nt
+  real(dp), intent(inout)             :: rcv_fun_p(nt,nlayer,npars),rcv_fun(nt)
+  real(dp), intent(in)                :: thk(nlayer), rho(nlayer),vp(nlayer), &
+                                          vs(nlayer),qa(nlayer),qb(nlayer)
+
+  ! local
+  integer(c_int)                      :: nft, n2,it, par_layer,ipar
+  complex(dcp)                        :: alpha(nlayer),beta(nlayer)
+  complex(dcp), allocatable           :: R22(:), R21(:),R21_square(:)
+  complex(dcp), allocatable           :: R22_m(:,:,:), R21_m(:,:,:)
+  complex(dcp), allocatable           :: rcv_spec(:)
+  real(dp),allocatable                :: rcv_tmp(:),gauss(:),fai(:),wa(:),w(:)
+  complex(dcp)                        :: omega
+  real(dp)                            :: sigma,wmax
+  real(dp),parameter                  :: pi = atan(1.0) * 4.0
+  complex(dcp),parameter              :: imag_i = (0.0_dp,1.0_dp)
+
+  ! padding to 2^n , total number of data point will be nft
+  call nextpow2(nt,nft)
+  n2 = nft / 2 + 1  
+
+  ! allcoate space
+  allocate(R22(n2), R21(n2),rcv_tmp(nft),&
+          gauss(n2),wa(n2),w(n2),rcv_spec(n2),fai(n2))
+  allocate(R22_m(nlayer,npars,n2), R21_m(nlayer,npars,n2))
+
+  ! add attenuation
+  alpha = vp * (1.0 + imag_i / (2.0 * qa) + 1.0 / (8.0 * qa**2) )
+  beta = vs * (1.0 + imag_i / (2.0 * qb) + 1.0 / (8.0 * qb**2) ) 
+
+  ! small attenuation term
+  sigma = 1.0 / (dt) / nft * 4.
+
+  do it = 1, n2
+    w(it) = 1.0_dp / nft / dt * (it - 1) * 2.0_dp * PI 
+    omega = cmplx(w(it),-sigma,kind=dcp)
+
+    call cal_response_par_all(omega,ray_p,thk,alpha,beta,vp,vs,rho,&
+                          nlayer,rf_type,R21(it),R22(it),&
+                          R21_m(:,:,it),R22_m(:,:,it))
+  enddo ! end it
+
+  ! compute gaussian 
+  gauss = exp(-(w/2/f0)**2)
+
+  ! denominator
+  wa = real(R21 * conjg(R21),kind=dp)
+  wmax = maxval(wa)
+  fai = max(wa,water * wmax)
+
+  ! RF in frequency domain
+  rcv_spec(:) = conjg(R21) * R22 * gauss * exp(-imag_i * w * t0) / fai
+
+  ! RF in time domain, we apply e^(sigma t ) to recover waveform
+  call irfft(rcv_spec,rcv_tmp,nft)
+  do it = 1,nt
+    rcv_fun(it) = rcv_tmp(it) / dt * exp(sigma * (-t0 + (it-1) * dt)) 
+  enddo
+
+  ! comptue R21_square
+  R21_square = R21**2
+  wa = real(R21_square * conjg(R21_square),kind=dp)
+  wmax = maxval(wa)
+  fai = max(wa,water * wmax)
+
+  ! RF derivative in frequency domain
+  do ipar = 1,npars
+    do par_layer = 1,nlayer
+      rcv_spec = conjg(R21_square) * (R22_m(par_layer,ipar,:) * R21 - R21_m(par_layer,ipar,:) * R22) &
+                *gauss * exp(-imag_i * w * t0) / fai
+      call irfft(rcv_spec,rcv_tmp,nft)
+      do it = 1,nt
+        rcv_fun_p(it,par_layer,ipar) = rcv_tmp(it) / dt * exp(sigma * (-t0 + (it-1) * dt)) 
+      enddo
+    enddo
+  enddo
+
+  deallocate(R22,R21,R22_m, R21_m,rcv_tmp,R21_square,w,wa,fai)
+  deallocate(gauss,rcv_spec)
+
+end subroutine cal_rf_par_freq_all
+
+subroutine cal_response(omega,ray_p,thk,alpha,beta,rho,nlayer,rf_type,R21,R22)
+  implicit none
+  integer(c_int),intent(in)                   :: nlayer,rf_type
+  real(dp),dimension(nlayer),intent(in)       :: thk,rho 
+  complex(dcp),dimension(nlayer),intent(in)   :: alpha,beta
+  real(dp),intent(in)                         :: ray_p 
+  complex(dp),intent(in)                      :: omega 
+  complex(dp),intent(inout)                   :: R21,R22 
+  
+  ! local variables
+  complex(dcp),parameter      :: imag_i = (0.0_dp,1.0_dp)
+  complex(dcp), dimension(4,4) :: matrix_E_inv,a_syn, a_syn1
+  integer(c_int)    :: i,ilayer,ilayer_inv
+
+  ! initialize the I matrix
+  a_syn = (0.0_dp,0.0_dp)
+  do i = 1, 4
+    a_syn(i,i) = (1.0_dp,0.0_dp)
+  enddo
+
+  ! multiple all the things from the bottom
+  do ilayer = 1, nlayer - 1
+    ilayer_inv = nlayer - ilayer
+    call cal_matrix_a(omega,ray_p,thk(ilayer_inv),alpha(ilayer_inv),&
+                      beta(ilayer_inv),rho(ilayer_inv),a_syn1)
+    a_syn = matmul(a_syn,a_syn1)
+  enddo
+
+  ! compute E_inv in half space 
+  call cal_E_inv(omega,ray_p,alpha(nlayer),&
+                  beta(nlayer),rho(nlayer),matrix_E_inv)
+  a_syn = matmul(matrix_E_inv,a_syn)
+
+  ! compute H/Z components 
+  if (rf_type == 1) then
+    R22 = a_syn(2,2) * imag_i
+    R21 = a_syn(2,1) 
+    !print*,a_syn(2,2) - a_syn(2,3) * tmp,a_syn(2,2),a_syn(2,3) * tmp
+  elseif (rf_type == 2) then
+    R22 = -a_syn(1,1) * imag_i
+    R21 = a_syn(1,2)
+  else
+    write(*,*) "error type!!"
+    stop
+  endif
+  
+end subroutine cal_response
+
+
+subroutine cal_response_par(omega,ray_p,thk,alpha,beta,vp,vs,&
+                            rho,nlayer,ipar,rf_type,R21,R22,R21_m,R22_m)
+  implicit none
+  integer(c_int),intent(in)                   :: nlayer,rf_type,ipar
+  real(dp),dimension(nlayer),intent(in)       :: thk,rho,vp,vs
+  complex(dcp),dimension(nlayer),intent(in)   :: alpha,beta
+  real(dp),intent(in)                         :: ray_p 
+  complex(dp),intent(in)                      :: omega 
+  complex(dp),intent(inout)                   :: R21,R22,R21_m(nlayer),R22_m(nlayer)
+
+  
+  ! local variables
+  complex(dcp),parameter              :: imag_i = (0.0_dp,1.0_dp)
+  integer(c_int)                      :: ilayer,ilayer_inv,par_layer,i
+  complex(dcp), dimension(4,4)        :: matrix_E_inv, a_syn, a_syn_m,matrix_E_inv_par
+  complex(dcp)                        :: matrix_ones(4,4)
+  complex(dcp)                        :: all_a(4,4,nlayer),all_a_m(4,4,nlayer)
+
+  ! initialize identity matrix
+  matrix_ones(:,:) = (0.0_dp,0.0_dp)
+  do i=1,4 
+    matrix_ones(i,i) = (1.0_dp,0.0_dp)
+  enddo
+
+  ! prepare all the matirx which are needed
+  do ilayer = 1, nlayer - 1
+    call cal_matrix_a(omega,ray_p,thk(ilayer),alpha(ilayer),&
+                      beta(ilayer),rho(ilayer),all_a(:,:,ilayer))
+    call cal_matrix_a_par(omega,ray_p,thk(ilayer),alpha(ilayer),&
+                      beta(ilayer),rho(ilayer),all_a_m(:,:,ilayer),ipar)
+    if(ipar == 3) then
+      all_a_m(:,:,ilayer) = all_a_m(:,:,ilayer) *  beta(ilayer) / vs(ilayer);
+    else if(ipar == 2) then 
+      all_a_m(:,:,ilayer) = all_a_m(:,:,ilayer) *  alpha(ilayer) / vp(ilayer);
+    endif
+  enddo
+
+  ! prepare Einv and Einv_par
+  call cal_E_inv(omega,ray_p,alpha(nlayer),beta(nlayer),&
+                rho(nlayer),matrix_E_inv)
+  call cal_E_inv_par(omega,ray_p,alpha(nlayer),beta(nlayer),&
+                      rho(nlayer),matrix_E_inv_par,ipar)
+  if(ipar == 3) then
+    matrix_E_inv_par = matrix_E_inv_par *  beta(nlayer) / vs(nlayer);
+  else if(ipar == 2) then 
+    matrix_E_inv_par = matrix_E_inv_par *  alpha(nlayer) / vp(nlayer);
+  endif
+  do par_layer = 1,nlayer 
+    a_syn(:,:) = matrix_ones(:,:)
+    do ilayer = 1, nlayer - 1
+      ilayer_inv = nlayer - ilayer
+      a_syn = matmul(a_syn,all_a(:,:,ilayer_inv))
+    enddo
+  enddo 
+  a_syn = matmul(matrix_E_inv,a_syn)
+
+  if (rf_type == 1) then
+    R22 = a_syn(2,2) * imag_i
+    R21 = a_syn(2,1) 
+  else
+    R22 = -a_syn(1,1) * imag_i
+    R21 = a_syn(1,2) 
+  endif  
+
+  ! remove NAN
+  if (isnan(abs((R22)))) then
+    R22 = (0.0_dp,0.0_dp)
+  endif              
+  if (isnan(abs((R21)))) then
+      R21 = (0.0_dp,0.0_dp)
+  endif
+
+  ! compute partial derivatives
+  do par_layer = 1, nlayer
+    a_syn_m(:,:) = matrix_ones(:,:)
+
+    do ilayer = 1, nlayer - 1
+      ilayer_inv = nlayer - ilayer
+      if (par_layer == ilayer_inv) then
+        a_syn_m = matmul(a_syn_m,all_a_m(:,:,ilayer_inv))
+      else
+        a_syn_m = matmul(a_syn_m,all_a(:,:,ilayer_inv))
+      endif
+    enddo
+
+    if (par_layer == nlayer) then
+      a_syn_m = matmul(matrix_E_inv_par,a_syn_m)
+    else
+      a_syn_m = matmul(matrix_E_inv,a_syn_m)
+    endif
+
+    if (rf_type == 1) then
+      R22_m(par_layer) = a_syn_m(2,2) * imag_i  
+      R21_m(par_layer) = a_syn_m(2,1)
+    else
+      R22_m(par_layer) = -a_syn_m(1,1) * imag_i 
+      R21_m(par_layer) = a_syn_m(1,2)
+    endif                    
+    
+    ! remove NAN
+    if (isnan(abs(R22_m(par_layer)))) then
+        R22_m(par_layer) = (0.0_dp,0.0_dp)
+    endif                
+    if (isnan(abs(R21_m(par_layer)))) then
+        R21_m(par_layer) = (0.0_dp,0.0_dp)
+    endif
+  enddo ! end par_layer
+
+end subroutine cal_response_par
+
+
+subroutine cal_response_par_all(omega,ray_p,thk,alpha,beta,vp,vs,&
+                            rho,nlayer,rf_type,R21,R22,R21_m,R22_m)
+  implicit none
+  integer,parameter                           :: npars = 4
+  integer(c_int),intent(in)                   :: nlayer,rf_type
+  real(dp),dimension(nlayer),intent(in)       :: thk,rho,vp,vs
+  complex(dcp),dimension(nlayer),intent(in)   :: alpha,beta
+  real(dp),intent(in)                         :: ray_p 
+  complex(dp),intent(in)                      :: omega 
+  complex(dp),intent(inout)                   :: R21,R22,R21_m(nlayer,npars),R22_m(nlayer,npars)
+  
+  ! local variables
+  complex(dcp),parameter              :: imag_i = (0.0_dp,1.0_dp)
+  integer(c_int)                      :: ilayer,ilayer_inv,par_layer,ipar,i
+  complex(dcp), dimension(4,4)        :: matrix_E_inv, a_syn, a_syn_m
+  complex(dcp),dimension(4,4,npars)   :: matrix_E_inv_par
+  complex(dcp)                        :: matrix_ones(4,4)
+  complex(dcp)                        :: all_a(4,4,nlayer),all_a_m(4,4,npars,nlayer)
+
+  ! initialize identity matrix
+  matrix_ones(:,:) = (0.0_dp,0.0_dp)
+  do i=1,4 
+    matrix_ones(i,i) = (1.0_dp,0.0_dp)
+  enddo
+
+  ! prepare all the matirx which are needed
+  do ilayer = 1, nlayer - 1
+    call cal_matrix_a(omega,ray_p,thk(ilayer),alpha(ilayer),&
+                      beta(ilayer),rho(ilayer),all_a(:,:,ilayer))
+    do ipar = 1,npars
+      call cal_matrix_a_par(omega,ray_p,thk(ilayer),alpha(ilayer),&
+                        beta(ilayer),rho(ilayer),all_a_m(:,:,ipar,ilayer),ipar)
+      if(ipar == 3) then
+        all_a_m(:,:,ipar,ilayer) = all_a_m(:,:,ipar,ilayer) *  beta(ilayer) / vs(ilayer);
+      else if(ipar == 2) then 
+        all_a_m(:,:,ipar,ilayer) = all_a_m(:,:,ipar,ilayer) *  alpha(ilayer) / vp(ilayer);
+      endif
+    enddo
+  enddo
+
+  ! prepare Einv and Einv_par
+  call cal_E_inv(omega,ray_p,alpha(nlayer),beta(nlayer),&
+                rho(nlayer),matrix_E_inv)
+  do ipar = 1,npars
+    call cal_E_inv_par(omega,ray_p,alpha(nlayer),beta(nlayer),&
+                        rho(nlayer),matrix_E_inv_par(:,:,ipar),ipar)
+    if(ipar == 3) then
+      matrix_E_inv_par(:,:,ipar) = matrix_E_inv_par(:,:,ipar) *  beta(nlayer) / vs(nlayer);
+    else if(ipar == 2) then 
+      matrix_E_inv_par(:,:,ipar) = matrix_E_inv_par(:,:,ipar) *  alpha(nlayer) / vp(nlayer);
+    endif
+  enddo
+  do par_layer = 1,nlayer 
+    a_syn(:,:) = matrix_ones(:,:)
+    do ilayer = 1, nlayer - 1
+      ilayer_inv = nlayer - ilayer
+      a_syn = matmul(a_syn,all_a(:,:,ilayer_inv))
+    enddo
+  enddo 
+  a_syn = matmul(matrix_E_inv,a_syn)
+
+  if (rf_type == 1) then
+    R22 = a_syn(2,2) * imag_i
+    R21 = a_syn(2,1) 
+  else
+    R22 = -a_syn(1,1) * imag_i
+    R21 = a_syn(1,2) 
+  endif  
+
+  ! remove NAN
+  if (isnan(abs((R22)))) then
+    R22 = (0.0_dp,0.0_dp)
+  endif              
+  if (isnan(abs((R21)))) then
+      R21 = (0.0_dp,0.0_dp)
+  endif
+
+  ! compute partial derivatives
+  do ipar = 1,npars
+    do par_layer = 1, nlayer
+      a_syn_m(:,:) = matrix_ones(:,:)
+
+      do ilayer = 1, nlayer - 1
+        ilayer_inv = nlayer - ilayer
+        if (par_layer == ilayer_inv) then
+          a_syn_m = matmul(a_syn_m,all_a_m(:,:,ipar,ilayer_inv))
+        else
+          a_syn_m = matmul(a_syn_m,all_a(:,:,ilayer_inv))
+        endif
+      enddo
+
+      if (par_layer == nlayer) then
+        a_syn_m = matmul(matrix_E_inv_par(:,:,ipar),a_syn_m)
+      else
+        a_syn_m = matmul(matrix_E_inv,a_syn_m)
+      endif
+
+      if (rf_type == 1) then
+        R22_m(par_layer,ipar) = a_syn_m(2,2) * imag_i  
+        R21_m(par_layer,ipar) = a_syn_m(2,1)
+      else
+        R22_m(par_layer,ipar) = -a_syn_m(1,1) * imag_i 
+        R21_m(par_layer,ipar) = a_syn_m(1,2)
+      endif                    
+      
+      ! remove NAN
+      if (isnan(abs(R22_m(par_layer,ipar)))) then
+          R22_m(par_layer,ipar) = (0.0_dp,0.0_dp)
+      endif                
+      if (isnan(abs(R21_m(par_layer,ipar)))) then
+          R21_m(par_layer,ipar) = (0.0_dp,0.0_dp)
+      endif
+    enddo ! end par_layer
+  enddo ! end ipar
+  
+end subroutine cal_response_par_all
 
 subroutine cal_matrix_a(omega, ray_p, thick,alpha,beta,rho,matrix_a)
   implicit none
@@ -569,16 +764,16 @@ subroutine cal_matrix_a(omega, ray_p, thick,alpha,beta,rho,matrix_a)
 end subroutine cal_matrix_a
 
 subroutine cal_matrix_a_par(omega, ray_p,thick,alpha,beta,rho,&
-                                matrix_a,par_types)
+                                matrix_a,ipars)
   !! compute derivative of a matrix
   !! Input:
   !! omega : angular frequency
-  !! par_types: =1 for rho, =2 for vp, =3 for vs, =4 for thk
+  !! ipars: =1 for rho, =2 for vp, =3 for vs, =4 for thk
   implicit none
   real(dp), intent(in)          :: ray_P,rho,thick
   complex(dcp),intent(in)       :: alpha,beta,omega 
   complex(dcp),INTENT(INOUT)    :: matrix_a(4,4)
-  integer(c_int), intent(in)    :: par_types
+  integer(c_int), intent(in)    :: ipars
 
   ! local
   complex(dcp)                  :: k,v_alpha, v_beta , k_alpha, k_beta,&
@@ -611,7 +806,7 @@ subroutine cal_matrix_a_par(omega, ray_p,thick,alpha,beta,rho,&
   y_b = sinh(v_beta * thick) /vb_k
 
 
-  if (par_types == 3) then
+  if (ipars == 3) then
     ! beta
     matrix_a(1,1) = 2. / beta *( gamma *(c_a - c_b)  - gamma1*k*thick*y_b ) 
     matrix_a(1,2) = 2. / beta *( gamma * (y_a - x_b) - (k * thick * c_b + y_b) )
@@ -629,7 +824,7 @@ subroutine cal_matrix_a_par(omega, ray_p,thick,alpha,beta,rho,&
     matrix_a(4,2) = - matrix_a(3,1)
     matrix_a(4,3) = - matrix_a(2,1)
     matrix_a(4,4) =  matrix_a(1,1)
-  elseif(par_types == 2) then
+  elseif(ipars == 2) then
     ! alpha
     matrix_a(1,1) = k * thick * y_a *gamma2 / alpha
     matrix_a(1,2) = 1 / va_k**2 / alpha *gamma1*gamma2 *(k*thick*c_a - y_a)
@@ -646,8 +841,8 @@ subroutine cal_matrix_a_par(omega, ray_p,thick,alpha,beta,rho,&
     matrix_a(4,1) = - 2. * miu / alpha *(k*thick*c_a + y_a) * gamma2
     matrix_a(4,2) = -2. * miu / alpha *k*thick*y_a*gamma1*gamma2
     matrix_a(4,3) = (k*thick*c_a + y_a) * gamma2 / alpha
-    matrix_a(4,4) = k*thick*y_a / alpha
-  else if(par_types == 1) then
+    matrix_a(4,4) = k*thick*y_a / alpha * gamma2
+  else if(ipars == 1) then
     ! rou
     matrix_a(:,:) = (0.0_dp,0.0_dp)
     matrix_a(1,3) = - gamma / (2*rho*miu) * (-c_a + c_b) 
@@ -658,7 +853,7 @@ subroutine cal_matrix_a_par(omega, ray_p,thick,alpha,beta,rho,&
     matrix_a(3,2) = 2. * miu * gamma / rho * (gamma1**2 *y_a - x_b)
     matrix_a(4,1) = 2. * miu * gamma / rho *(-x_a + gamma1**2 * y_b)
     matrix_a(4,2) = 2. * miu * gamma * gamma1 / rho *(-c_a + c_b)
-  else if(par_types == 4) then
+  else if(ipars == 4) then
     !thick
     matrix_a(1,1) = (x_a - gamma1*x_b) * k
     matrix_a(1,2) = gamma1*k*c_a - v_beta* vb_k *c_b
@@ -726,58 +921,54 @@ subroutine cal_E_inv(omega, ray_p,alpha,beta,rho,matrix_E_inv)
 
 end subroutine cal_E_inv
 
-subroutine cal_E_inv_par(omega, ray_p,alpha,beta,rho,matrix_E_inv, par_types)
+subroutine cal_E_inv_par(omega, ray_p,alpha,beta,rho,matrix_E_inv, ipars)
   implicit none
   real(dp), intent(in)                :: ray_P,rho
   complex(dcp),intent(in)             :: alpha,beta,omega
   complex(dcp),intent(out)            :: matrix_E_inv(4,4)
-  integer(c_int), intent(in)          :: par_types  
+  integer(c_int), intent(in)          :: ipars  
   
   ! local
   complex(dcp)                        :: k,v_alpha, v_beta , k_alpha, k_beta,&
                                          gamma, gamma1, gamma3,miu,va_k,vb_k  
-
-  ! elastic modulus
+! elastic modulus
   miu = rho * beta**2 
   k = omega * ray_p
   k_alpha = omega / alpha
   k_beta = omega / beta
   v_alpha = sqrt(k**2 - k_alpha**2)
   v_beta = sqrt(k**2 - k_beta**2)     
-  gamma = 2 * ray_p **2 * beta ** 2
-  ! v_alpha / k and v_beta / k 
-  va_k = sqrt(ray_p**2 - (1.0_dp,0.0_dp) / alpha**2) / ray_p 
-  vb_k = sqrt(ray_p**2 - (1.0_dp,0.0_dp)  / beta**2) / ray_p
+  gamma = 2 * k**2 * beta**2 / omega**2
   gamma1 = 1 - 1 / gamma
   gamma3 = 1.0_dp / (gamma - 2_dp)
   
-  if (par_types == 3) then
+  if (ipars == 3) then
     !beta
     matrix_E_inv(:,:) = (0.0d0,0.0d0)
     matrix_E_inv(1,1) = -1.0
-    matrix_E_inv(1,2) = -1. / va_k 
-    matrix_E_inv(2,1) = (1 - gamma1*gamma3) / vb_k
+    matrix_E_inv(1,2) = -k / v_alpha
+    matrix_E_inv(2,1) = k / v_beta *(1 - gamma1*gamma3)
     matrix_E_inv(2,2) = 1.0
-    matrix_E_inv(2,3) = gamma3 / 2 / miu / vb_k
+    matrix_E_inv(2,3) = k * gamma3 / 2 / miu / v_beta
     matrix_E_inv(3,1) = 1.0
-    matrix_E_inv(3,2) = -1. / va_k 
-    matrix_E_inv(4,1) = -matrix_E_inv(2,1)
+    matrix_E_inv(3,2) = -k / v_alpha
+    matrix_E_inv(4,1) = -k / v_beta *(1 - gamma3*gamma1)
     matrix_E_inv(4,2) = 1.0
-    matrix_E_inv(4,3) = -matrix_E_inv(2,3)
+    matrix_E_inv(4,3) = -k *gamma3 / 2 / miu / v_beta
     matrix_E_inv = matrix_E_inv * gamma / beta
-  elseif(par_types == 1) then
+  elseif(ipars == 1) then
     !rou
     matrix_E_inv(:,:) = (0.0d0,0.0d0)
     matrix_E_inv(1,3) = -1.0
-    matrix_E_inv(1,4) = -1. / va_k 
-    matrix_E_inv(2,3) = 1. / vb_k
+    matrix_E_inv(1,4) = -k / v_alpha
+    matrix_E_inv(2,3) = k / v_beta
     matrix_E_inv(2,4) = 1.0
     matrix_E_inv(3,3) = 1.0
-    matrix_E_inv(3,4) = matrix_E_inv(1,4) 
-    matrix_E_inv(4,3) = -matrix_E_inv(2,3)
+    matrix_E_inv(3,4) = -k / v_alpha
+    matrix_E_inv(4,3) = -k / v_beta
     matrix_E_inv(4,4) = 1.0
     matrix_E_inv = matrix_E_inv * gamma / 4.0_dp / rho / miu
-  elseif(par_types == 2) then
+  elseif(ipars == 2) then
     !alpha
     matrix_E_inv(:,:) = (0.0_dp,0.0_dp)
     matrix_E_inv(1,2) = gamma1
@@ -787,11 +978,12 @@ subroutine cal_E_inv_par(omega, ray_p,alpha,beta,rho,matrix_E_inv, par_types)
     ! matrix_E_inv = matrix_E_inv / alpha *&
     !                k_alpha**2 * k**3 / k_beta**2 / v_alpha**3
     matrix_E_inv = matrix_E_inv * beta**2 / alpha**3 / va_k**3
-  else if(par_types == 4) then 
+  else if(ipars == 4) then 
     ! thick
     matrix_E_inv(:,:) = (0.0_dp,0.0_dp)
   else 
 
   endif
-end
+end subroutine cal_E_inv_par
+
 end module RFModule

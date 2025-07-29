@@ -16,7 +16,7 @@ def main():
 
     # receiver function parameters
     rayp = 0.045; dt = 0.1; 
-    nt = 500; gauss = 1.5; time_shift = 5.0
+    nt = 500; gauss = 1.0; time_shift = 5.0
     water = 0.001; rf_type = 'P'; rf_method = "time"
     model_rf = ReceiverFunc(rayp,nt,dt,gauss,time_shift,
                             water,rf_type, rf_method)
@@ -26,7 +26,8 @@ def main():
     
     # set model parameters
     thk =  np.array([6,6,13,5,10,30,0]) 
-    vs = np.array([3.2,2.8,3.46,3.3,3.9,4.5,4.7])
+    # vs = np.array([3.2,2.8,3.46,3.3,3.9,4.5,4.7])
+    vs = np.array([3.2,3.4,3.46,3.7,3.9,4.5,4.7])
     
 
     model_swd.set_thk(thk)

@@ -1,25 +1,34 @@
 import matplotlib.pyplot as plt 
 import numpy as np 
 import os
+import yaml
 
 
 from src.plot_results import Obs_data
 from src.plot_results import plotFig
 
+# load yaml files
+with open("param.yaml","r") as f:
+    param = yaml.safe_load(f)
+
 # set para
-plotFigure = plotFig()
-plotFigure.obs_data.set_t(np.linspace(5,40,36),"Rc")
-plotFigure.obs_data.set_t(np.linspace(5,40,36),"Rg")
-plotFigure.obs_data.set_t(np.arange(125) * 0.4 - 5.0,"rf")
+plotFigure = plotFig(
+    HMC_output_path=param['hmc']['OUTPUT_DIR'],
+    chain_name=param['hmc']['name'],
+    figure_output_path=param['hmc']['OUTPUT_DIR'])
+plotFigure.obs_data.set_t(param['swd']['tRc'],"Rc")
+plotFigure.obs_data.set_t(param['swd']['tRg'],"Rg")
+
+t = np.arange(param['rf']['nt']) * param['rf']['dt'] - param['rf']['time_shift']
+plotFigure.obs_data.set_t(t,"rf")
 # set_t for setting the time series
 
-
-real_data = np.loadtxt("./real_syn")
+real_data = np.load(f"{param['hmc']['OUTPUT_DIR']}/real_syn.npy")
 plotFigure.update_real_data(real_data)
 
 
-thk_real = np.array([6,6,13,5,10,30,0]) 
-vs_real = np.array([3.2,2.8,3.46,3.3,3.9,4.5,4.7])
+thk_real = np.array(param['true_model']['thk'])
+vs_real = np.array(param['true_model']['vs'])
 #thk_real = np.array([5.,10.,16.,0.0]) 
 #vs_real = np.array([3.1,3.64,3.87,4.5])
 plotFigure.update_refmodel(np.hstack((vs_real,thk_real)))
@@ -63,7 +72,7 @@ plotFigure.savefig(figure,"misfit.png")
 
 
 
-figure = plotFigure.plot_best_fit_hist(np.array([-0.2,0.4,100]),np.array([2.5,4,100]),np.array([2,4,100]))
+figure = plotFigure.plot_best_fit_hist(np.array([-0.2,0.45,100]),np.array([2.5,4,100]),np.array([2,4,100]))
 # np.array([-0.1,0.2,100])  amplitude of rf 
 # np.array([2,3,100])       velocity of Rc
 # np.array([1.6,2.4,100])    rg 
